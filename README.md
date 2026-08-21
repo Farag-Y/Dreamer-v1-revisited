@@ -1,4 +1,5 @@
 # Dreamer-v1-revisited
+# UNDER PROGRESS
 
 A re-implementation of Dreamer v1 written in 2026 for learning purposes, built on top of the world model from [PlaNet-revisited](https://github.com/Farag-Y/PlaNet-revisited), using a modern Python project structure (uv, Hydra config, modular model layout).
 
