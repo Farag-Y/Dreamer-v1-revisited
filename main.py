@@ -68,6 +68,7 @@ def collect_with_planner(cfg:DictConfig,device:str,env,rssm,encoder,planner,expe
     metrics.episodes.append(metrics.last_episode + 1)
     metrics.train_rewards.append(episode_reward)
 
+
 def calculate_latent_overshooting(cfg, rssm, reward_model, actions, nonterminals,
                                    posterior_states, posterior_means, posterior_std_devs,
                                    rssm_beliefs, rewards, free_nats, device):
