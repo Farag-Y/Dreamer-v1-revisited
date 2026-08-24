@@ -30,15 +30,37 @@ class FreezeParameters:
                 i += 1
 
 
-def imagine_rollout(start_states, actor, rssm, H=15):
-    pass
+def imagine_rollout(start_state, start_belief, actor, reward_model, rssm, H=15):
+    states = [start_state]
+    beliefs = [start_belief]
+    rewards = []
+
+    state = start_state
+    belief = start_belief
+    for _ in range(H):
+        action = actor.sample(belief, state).unsqueeze(0)
+        rssm_out = rssm(state, action, belief)
+        belief = rssm_out.det_hidden_states[-1]
+        state = rssm_out.prior_states[-1]
+        reward = reward_model(belief, state)
+
+        states.append(state)
+        beliefs.append(belief)
+        rewards.append(reward)
+
+    states = torch.stack(states, dim=1)    # [batch, H+1, latent_dim]
+    beliefs = torch.stack(beliefs, dim=1)  # [batch, H+1, belief_dim]
+    rewards = torch.stack(rewards, dim=1)  # [batch, H]
+    return states, beliefs, rewards
 
 
-def compute_vlambda(states, rewards, critic, gamma=0.99, lam=0.95):
-    pass
+def compute_vlambda(states, beliefs, rewards, critic, gamma=0.99, lam=0.95):
+    #States and beliefs are [batch, H+1, dim], we will need to squeeze it into shape [B*T,dim] as the critic ( and also the actor) expects the shapes as [batch,dim]
+    H = rewards.shape[1]
+    batch = rewards.shape[0]
+    values = critic (beliefs.reshape(-1,beliefs.shape[-1]),states.reshape(-1,states.shape[-1]),)
 
-
-def critic_loss(states, v_lambda, critic):
+def critic_loss(states, beliefs, v_lambda, critic):
     pass
 
 
@@ -50,7 +72,7 @@ def execute_one_run_with_actor(cfg, device, env, rssm, encoder, actor, observati
     pass
 
 
-def train_actor_critic(cfg: DictConfig, device: str, env, actor, actor_optim, encoder, critic, critic_optim, rssm, experience_replay):
+def train_actor_critic(cfg: DictConfig, device: str, env, actor, actor_optim, encoder, critic, critic_optim, rssm, reward_model, experience_replay):
     '''
     1. Freeze RSSM.
     2. Imagination rollout.
@@ -72,12 +94,13 @@ def train_actor_critic(cfg: DictConfig, device: str, env, actor, actor_optim, en
     episode_reward = 0.0
 
     with FreezeParameters(rssm):
-        states, rewards = imagine_rollout(start_states=state, actor=actor, rssm=rssm)  # TODO: belief as input?
-        v_lambda = compute_vlambda(states, rewards, critic)
+        states, beliefs, rewards = imagine_rollout(
+            start_state=state, start_belief=belief, actor=actor, reward_model=reward_model, rssm=rssm)
+        v_lambda = compute_vlambda(states, beliefs, rewards, critic)
 
     # Critic
     critic_optim.zero_grad()
-    c_loss = critic_loss(states, v_lambda, critic)
+    c_loss = critic_loss(states, beliefs, v_lambda, critic)
     c_loss.backward()
     nn.utils.clip_grad_norm_(critic_optim.param_groups[0]['params'], cfg.grad_clip_norm)
     critic_optim.step()
