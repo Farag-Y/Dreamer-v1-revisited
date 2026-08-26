@@ -38,15 +38,16 @@ def imagine_rollout(start_state, start_belief, actor, reward_model, rssm, H=15):
     state = start_state
     belief = start_belief
     for _ in range(H):
+        #TODO: Re-align on rewards, actions, and state allignment
+        rewards.append(reward_model(belief, state))  # r_tau ~ q(r_tau | s_tau), decoded before the step
+
         action = actor.sample(belief, state).unsqueeze(0)
         rssm_out = rssm(state, action, belief)
         belief = rssm_out.det_hidden_states[-1]
         state = rssm_out.prior_states[-1]
-        reward = reward_model(belief, state)
 
         states.append(state)
         beliefs.append(belief)
-        rewards.append(reward)
 
     states = torch.stack(states, dim=1)    # [batch, H+1, latent_dim]
     beliefs = torch.stack(beliefs, dim=1)  # [batch, H+1, belief_dim]
@@ -54,46 +55,42 @@ def imagine_rollout(start_state, start_belief, actor, reward_model, rssm, H=15):
     return states, beliefs, rewards
 
 def compute_vlambda(states, beliefs, rewards, critic, gamma=0.99, lam=0.95):
-    #States and beliefs are [batch, H+1, dim], we will need to squeeze it into shape [B*T,dim] as the critic ( and also the actor) expects the shapes as [batch,dim]
-    H = rewards.shape[1]
-    batch = rewards.shape[0]
-    with torch.no_grad():
-        values = critic (beliefs.reshape(-1,beliefs.shape[-1]),states.reshape(-1,states.shape[-1]),)
-        #reshape of vales necessary ?
-        
-    gamma_pows = torch.tensor(
-    [gamma ** n for n in range(H + 1)]
-    )
-    V_lambda = torch.zeros(batch, H + 1)
+    '''
+    TD(lambda) targets for an imagined rollout (Dreamer v1, eqs. 6-7).
 
-    for tau in range(H+1):
-        max_k = H-tau # Max k that could be reached for this state.
-        if max_k==0:
-            V_lambda[:,tau]=values[:,H]
-            continue
-        vl=torch.zeros(batch)
+    states, beliefs: [batch, H+1, dim], indexed tau = 0..H.
+    rewards:         [batch, H],        indexed tau = 0..H-1, rewards[:, tau] = r_tau ~ q(r_tau|s_tau).
 
-        ## Main V_lambda(S_tau) calc
-        for k in range(1,max_k):
-            w=(1-lam) * (lam**(k-1))
-            r_sum = torch.zeros(batch)
-            ##Calculate V^K_N
-            for n in range(k):
-                r_sum = r_sum + gamma_pows[n] * rewards[:, tau + n]
-            h     = min(tau + k, H)
-            VkN   = r_sum + gamma_pows[k] * values[:, h]  # [B]
-            vl    = vl + w * VkN
-        ##Final  term
-        w_final = lam ** (max_k - 1)
+    We flatten states/beliefs to [batch*(H+1), dim] since the critic (like the actor) expects [batch, dim].
+    '''
+    batch, H = rewards.shape
+    device, dtype = states.device, states.dtype
 
-        r_sum_final = torch.zeros(batch)
-        for n in range(max_k):
-            r_sum_final = r_sum_final + gamma_pows[n] * rewards[:, tau + n]
+    with FreezeParameters(critic):
+        values = critic(
+            beliefs.reshape(-1, beliefs.shape[-1]),
+            states.reshape(-1, states.shape[-1]),
+        ).reshape(batch, H + 1)
 
-        VkN_final = r_sum_final + gamma_pows[max_k] * values[:, H]
-        vl        = vl + w_final * VkN_final
+    gamma_pows = gamma ** torch.arange(H + 1, device=device, dtype=dtype)
 
-        V_lambda[:, tau] = vl 
+    V_lambda = torch.zeros(batch, H + 1, device=device, dtype=dtype)
+    V_lambda[:, H] = values[:, H]
+
+    for tau in range(H):
+        max_k = H - tau 
+        vl = torch.zeros(batch, device=device, dtype=dtype)
+        r_sum = torch.zeros(batch, device=device, dtype=dtype)
+
+        for k in range(1, max_k + 1):
+            r_sum = r_sum + gamma_pows[k - 1] * rewards[:, tau + k - 1]
+            V_kN = r_sum + gamma_pows[k] * values[:, tau + k]
+
+            is_final = k == max_k
+            weight = lam ** (k - 1) if is_final else (1 - lam) * lam ** (k - 1)
+            vl = vl + weight * V_kN
+
+        V_lambda[:, tau] = vl
     return V_lambda
 
 def critic_loss(states, beliefs, v_lambda, critic):
