@@ -94,7 +94,13 @@ def compute_vlambda(states, beliefs, rewards, critic, gamma=0.99, lam=0.95):
     return V_lambda
 
 def critic_loss(states, beliefs, v_lambda, critic):
-    pass
+    batch, T = states.shape[:2]  # T = H + 1 (tau = 0..H, matches v_lambda)
+    v_pred = critic(
+        beliefs.reshape(-1, beliefs.shape[-1]),
+        states.reshape(-1, states.shape[-1]),
+    ).reshape(batch, T)
+    target = v_lambda.detach()
+    return 0.5 * (v_pred - target).pow(2).mean()
 
 
 def actor_loss(v_lambda):
