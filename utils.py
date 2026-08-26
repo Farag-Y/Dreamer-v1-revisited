@@ -1,17 +1,20 @@
 import os
+
 import cv2
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 from omegaconf import DictConfig
 from torch import optim
+
 from experience_replay import ExperienceReplay
 from metrics import Metrics
-from models.rssm import RSSM
-from models.observation_model import ObservationModel
 from models.encoder import Encoder
-from models.reward_model import RewardModel
+from models.observation_model import ObservationModel
 from models.planner import Planner
+from models.reward_model import RewardModel
+from models.rssm import RSSM
+
 
 def model_wrapper(model, *inputs, trailing_dims=3):
     leading = inputs[0].shape[:-trailing_dims]
