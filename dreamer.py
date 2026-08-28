@@ -111,13 +111,14 @@ def execute_one_run_with_actor(cfg, device, env, rssm, encoder, actor, observati
 
     with torch.no_grad():
         encoded = encoder(observation.to(device))
-        rssm_out = rssm(state, action.unsqueeze(0), belief, encoded.unsqueeze(0)) ## action has to go through RSSM first ? 
+        rssm_out = rssm(state, action.unsqueeze(0), belief, encoded.unsqueeze(0)) ## TODO: action has to go through RSSM first ? 
         belief = rssm_out.det_hidden_states[-1]
         state  = rssm_out.posterior_states[-1]
         action = actor.mode(belief,state) 
 
         action = action + torch.randn_like(action)*0.3 if explore else action
-        action=action.clamp(cfg.min_action,cfg.max_action)
+        min_action, max_action = env.action_range
+        action = action.clamp(min_action, max_action)
         next_obs, reward, done = env.step(action[0].cpu())
     return belief, state, action, next_obs, reward, done
 
@@ -136,7 +137,8 @@ def update_experience(cfg,env,rssm,encoder,actor,experience_replay,device):
         if done:
             break
 def train_actor_critic(cfg: DictConfig, device: str,state,belief, env, actor, actor_optim, encoder, critic, critic_optim, rssm, reward_model, experience_replay):
-
+    state = state.reshape(-1, state.shape[-1]).detach()
+    belief = belief.reshape(-1, belief.shape[-1]).detach()
 
     with FreezeParameters(rssm):
         states, beliefs, rewards = imagine_rollout(

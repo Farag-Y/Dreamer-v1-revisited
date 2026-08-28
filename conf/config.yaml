@@ -27,6 +27,8 @@ activation_function: relu
 
 # Optimisation
 learning_rate: 1e-3
+actor_learning_rate: 8e-5
+critic_learning_rate: 8e-5
 learning_rate_schedule: 0
 adam_epsilon: 1e-4
 grad_clip_norm: 1000

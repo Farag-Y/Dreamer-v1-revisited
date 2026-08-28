@@ -13,7 +13,7 @@ from torch.nn import functional as F
 from tqdm import tqdm
 
 from cloud_storage import upload_config
-from dreamer import train_actor_critic
+from dreamer import train_actor_critic, update_experience
 from env_wrapper import Env
 from experience_replay import ExperienceReplay
 from metrics import Metrics
@@ -30,6 +30,14 @@ from utils import (
     write_video,
 )
 
+'''
+TODO:
+1. Remove the old CEM planner
+2. Unify var nams between deterministic state of RSSM with 'belief'
+3.Further clean ups
+4. Add new losses to metrics
+5. update saving checkpoints and models
+'''
 
 def execute_one_run_with_planner(cfg:DictConfig,device:str,env,rssm,encoder,planner,action,observation,belief,state,explore):
     with torch.no_grad():
@@ -160,7 +168,7 @@ def train_world_model(runs:int,cfg:DictConfig,rssm,decoder_model,reward_model,ac
         obs, actions, rewards, nonterminals = experience_replay.sample(cfg.batch_size, cfg.chunk_size)
         losses,belief,state=train_rssm(cfg,rssm,actions,rewards,nonterminals,obs,encoder,reward_model,decoder_model,adam_optim,losses,device)
         train_actor_critic(cfg, device,state,belief, env, actor, actor_optim, encoder, critic, critic_optim, rssm, reward_model, experience_replay)
-        update_experience
+    update_experience(cfg,env,rssm,encoder,actor,experience_replay,device)
     return losses
 
 def _run_test_episode(cfg, device, env, rssm, encoder, planner):
@@ -199,11 +207,11 @@ def test(cfg: DictConfig, rssm, reward_model, encoder, planner, device, env,
     metrics.save(os.path.join(results_dir, 'metrics.pt'))
 
 
-def train(cfg:DictConfig,rssm,decoder_model,reward_model,encoder,adam_optim,planner,experience_replay,metrics:Metrics,device,env,results_dir:str,r2_prefix:str=""):
+def train(cfg:DictConfig,rssm,decoder_model,reward_model,encoder,adam_optim,planner,actor,critic,actor_optim,critic_optim,experience_replay,metrics:Metrics,device,env,results_dir:str,r2_prefix:str=""):
     for episode in tqdm(range(metrics.last_episode+1, cfg.episodes + 1), total=cfg.episodes, initial=metrics.last_episode):
-        losses = train_world_model(cfg.collect_interval,cfg,rssm,decoder_model,reward_model,encoder,adam_optim,experience_replay,metrics,device,env)
+        losses = train_world_model(cfg.collect_interval,cfg,rssm,decoder_model,reward_model,actor,critic,actor_optim,critic_optim,encoder,adam_optim,experience_replay,device,env)
         record_losses(metrics, losses)
-        collect_with_planner(cfg,device,env,rssm,encoder,planner,experience_replay,metrics)
+        # collect_with_planner(cfg,device,env,rssm,encoder,planner,experience_replay,metrics)
         plot_metrics(metrics, results_dir)
         if episode % cfg.checkpoint_interval == 0:
             save_checkpoint(cfg, episode, rssm, decoder_model, reward_model, encoder, adam_optim, metrics, results_dir, r2_prefix=r2_prefix)
@@ -226,7 +234,7 @@ def main(cfg: DictConfig) -> None:
         bit_depth=cfg.bit_depth,
     )
 
-    rssm, decoder_model, reward_model, encoder, adam_optim, planner = initialize_models(cfg, device, env)
+    rssm, decoder_model, reward_model, encoder, adam_optim, planner, actor, critic, actor_optim, critic_optim = initialize_models(cfg, device, env)
     metrics = load_checkpoint(cfg, device, rssm, decoder_model, reward_model, encoder, adam_optim) if cfg.models else Metrics()
 
     if cfg.test:
@@ -243,7 +251,7 @@ def main(cfg: DictConfig) -> None:
         os.makedirs(results_dir, exist_ok=True)
         if getattr(cfg, 'r2_enabled', False):
             upload_config(cfg, run_id)
-        train(cfg, rssm, decoder_model, reward_model, encoder, adam_optim, planner, experience_replay, metrics, device, env, results_dir, r2_prefix=run_id)
+        train(cfg, rssm, decoder_model, reward_model, encoder, adam_optim, planner, actor, critic, actor_optim, critic_optim, experience_replay, metrics, device, env, results_dir, r2_prefix=run_id)
 
     env.close()
 

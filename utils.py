@@ -9,6 +9,7 @@ from torch import optim
 
 from experience_replay import ExperienceReplay
 from metrics import Metrics
+from models.actor_critic import Actor, Critic
 from models.encoder import Encoder
 from models.observation_model import ObservationModel
 from models.planner import Planner
@@ -55,7 +56,24 @@ def initialize_models(cfg: DictConfig, device: str, env):
         min_action=min_action,
         max_action=max_action,
     ).to(device=device)
-    return rssm, decoder_model, reward_model, encoder, adam_optim, planner
+
+    actor = Actor(
+        belief_size=cfg.belief_size,
+        state_size=cfg.state_size,
+        hidden_size=cfg.hidden_size,
+        action_size=env.action_size,
+        non_linearity=cfg.activation_function,
+    ).to(device=device)
+    critic = Critic(
+        belief_size=cfg.belief_size,
+        state_size=cfg.state_size,
+        hidden_size=cfg.hidden_size,
+        non_linearity=cfg.activation_function,
+    ).to(device=device)
+    actor_optim = optim.Adam(actor.parameters(), lr=cfg.actor_learning_rate, eps=cfg.adam_epsilon)
+    critic_optim = optim.Adam(critic.parameters(), lr=cfg.critic_learning_rate, eps=cfg.adam_epsilon)
+
+    return rssm, decoder_model, reward_model, encoder, adam_optim, planner, actor, critic, actor_optim, critic_optim
 
 
 def collect_observations(cfg: DictConfig, device: str, env, metrics: Metrics) -> ExperienceReplay:
