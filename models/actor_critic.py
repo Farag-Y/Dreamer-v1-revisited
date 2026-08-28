@@ -27,6 +27,9 @@ class Actor(nn.Module):
      eps     = randn_like(mean)
      action  = tanh(mean + std * eps)
      return action
+  def mode(self,belief,state):
+    mean,_ = self.forward(belief,state)
+    return tanh(mean)
 
 
 
@@ -46,3 +49,4 @@ class Critic(nn.Module):
     hidden = self.act_fn(self.fc3(hidden))
     value = self.fc4(hidden)
     return value.squeeze(-1)
+

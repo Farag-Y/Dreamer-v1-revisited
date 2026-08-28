@@ -13,6 +13,7 @@ from torch.nn import functional as F
 from tqdm import tqdm
 
 from cloud_storage import upload_config
+from dreamer import train_actor_critic
 from env_wrapper import Env
 from experience_replay import ExperienceReplay
 from metrics import Metrics
@@ -118,43 +119,48 @@ def calculate_latent_overshooting(cfg, rssm, reward_model, actions, nonterminals
             F.mse_loss(pred_rewards * reward_mask, target_rewards, reduction='none').mean(dim=(0, 1)) * (chunk_size - 1)
 
     return total
-
-def train_world_model(runs:int,cfg:DictConfig,rssm,decoder_model,reward_model,encoder,adam_optim,experience_replay,metrics:Metrics,device):
+def train_rssm(cfg,rssm,actions,rewards,nonterminals,obs,encoder,reward_model,decoder_model,adam_optim,losses,device):
+    init_belief = torch.zeros(cfg.batch_size, cfg.belief_size, device=device)
+    init_state  = torch.zeros(cfg.batch_size, cfg.state_size,  device=device)
     free_nats = torch.full((1,), cfg.free_nats, dtype=torch.float32, device=device)
+    encoded_obs = model_wrapper(encoder, obs[1:])
+    rssm_output: RSSMOutput = rssm(init_state, actions[:-1], init_belief, encoded_obs, nonterminals[:-1])
+    predicted_reward = model_wrapper(reward_model, rssm_output.det_hidden_states, rssm_output.posterior_states, trailing_dims=1)
+
+    kl_div = kl_divergence(
+        Normal(rssm_output.posterior_means, rssm_output.posterior_std_devs),
+        Normal(rssm_output.prior_means,     rssm_output.prior_std_devs),
+    ).sum(dim=-1)
+    kl_loss = torch.max(kl_div, free_nats).mean()
+    #TODO: KL Beta ? 
+    decoded_obs = model_wrapper(decoder_model, rssm_output.det_hidden_states, rssm_output.posterior_states, trailing_dims=1)
+    obs_loss    = F.mse_loss(decoded_obs, obs[1:], reduction='none').sum((2, 3, 4)).mean()
+    reward_loss = F.mse_loss(predicted_reward, rewards[:-1], reduction='none').mean()
+    overshooting_loss = calculate_latent_overshooting(
+        cfg, rssm, reward_model,
+        actions[:-1], nonterminals[:-1],
+        rssm_output.posterior_states,
+        rssm_output.posterior_means,
+        rssm_output.posterior_std_devs,
+        rssm_output.det_hidden_states,
+        rewards,        # full rewards tensor — function slices [t:d] internally
+        free_nats,
+        device,
+    )
+    adam_optim.zero_grad()
+    (kl_loss + obs_loss + reward_loss + overshooting_loss).backward()
+    nn.utils.clip_grad_norm_(adam_optim.param_groups[0]['params'], cfg.grad_clip_norm)
+    adam_optim.step()
+    losses.append([kl_loss.item(), obs_loss.item(), reward_loss.item(), overshooting_loss.item()])
+    return losses,rssm_output.det_hidden_states,rssm_output.posterior_states #TODO: det_hiddenstates == belief ??
+
+def train_world_model(runs:int,cfg:DictConfig,rssm,decoder_model,reward_model,actor,critic,actor_optim,critic_optim,encoder,adam_optim,experience_replay,device,env):
     losses = []
     for _ in tqdm(range(runs)):
-        init_belief = torch.zeros(cfg.batch_size, cfg.belief_size, device=device)
-        init_state  = torch.zeros(cfg.batch_size, cfg.state_size,  device=device)
         obs, actions, rewards, nonterminals = experience_replay.sample(cfg.batch_size, cfg.chunk_size)
-        encoded_obs = model_wrapper(encoder, obs[1:])
-        rssm_output: RSSMOutput = rssm(init_state, actions[:-1], init_belief, encoded_obs, nonterminals[:-1])
-        predicted_reward = model_wrapper(reward_model, rssm_output.det_hidden_states, rssm_output.posterior_states, trailing_dims=1)
-
-        kl_div = kl_divergence(
-            Normal(rssm_output.posterior_means, rssm_output.posterior_std_devs),
-            Normal(rssm_output.prior_means,     rssm_output.prior_std_devs),
-        ).sum(dim=-1)
-        kl_loss = torch.max(kl_div, free_nats).mean()
-        #TODO: KL Beta ? 
-        decoded_obs = model_wrapper(decoder_model, rssm_output.det_hidden_states, rssm_output.posterior_states, trailing_dims=1)
-        obs_loss    = F.mse_loss(decoded_obs, obs[1:], reduction='none').sum((2, 3, 4)).mean()
-        reward_loss = F.mse_loss(predicted_reward, rewards[:-1], reduction='none').mean()
-        overshooting_loss = calculate_latent_overshooting(
-            cfg, rssm, reward_model,
-            actions[:-1], nonterminals[:-1],
-            rssm_output.posterior_states,
-            rssm_output.posterior_means,
-            rssm_output.posterior_std_devs,
-            rssm_output.det_hidden_states,
-            rewards,        # full rewards tensor — function slices [t:d] internally
-            free_nats,
-            device,
-        )
-        adam_optim.zero_grad()
-        (kl_loss + obs_loss + reward_loss + overshooting_loss).backward()
-        nn.utils.clip_grad_norm_(adam_optim.param_groups[0]['params'], cfg.grad_clip_norm)
-        adam_optim.step()
-        losses.append([kl_loss.item(), obs_loss.item(), reward_loss.item(), overshooting_loss.item()])
+        losses,belief,state=train_rssm(cfg,rssm,actions,rewards,nonterminals,obs,encoder,reward_model,decoder_model,adam_optim,losses,device)
+        train_actor_critic(cfg, device,state,belief, env, actor, actor_optim, encoder, critic, critic_optim, rssm, reward_model, experience_replay)
+        update_experience
     return losses
 
 def _run_test_episode(cfg, device, env, rssm, encoder, planner):
@@ -195,7 +201,7 @@ def test(cfg: DictConfig, rssm, reward_model, encoder, planner, device, env,
 
 def train(cfg:DictConfig,rssm,decoder_model,reward_model,encoder,adam_optim,planner,experience_replay,metrics:Metrics,device,env,results_dir:str,r2_prefix:str=""):
     for episode in tqdm(range(metrics.last_episode+1, cfg.episodes + 1), total=cfg.episodes, initial=metrics.last_episode):
-        losses = train_world_model(cfg.collect_interval,cfg,rssm,decoder_model,reward_model,encoder,adam_optim,experience_replay,metrics,device)
+        losses = train_world_model(cfg.collect_interval,cfg,rssm,decoder_model,reward_model,encoder,adam_optim,experience_replay,metrics,device,env)
         record_losses(metrics, losses)
         collect_with_planner(cfg,device,env,rssm,encoder,planner,experience_replay,metrics)
         plot_metrics(metrics, results_dir)

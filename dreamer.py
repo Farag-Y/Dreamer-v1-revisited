@@ -107,30 +107,36 @@ def actor_loss(v_lambda):
     return -v_lambda.mean()
 
 
-def execute_one_run_with_actor(cfg, device, env, rssm, encoder, actor, observation, belief, state, explore=True):
-    pass
+def execute_one_run_with_actor(cfg, device, env, rssm, encoder, actor, observation, belief, state,action,explore=True):
 
+    with torch.no_grad():
+        encoded = encoder(observation.to(device))
+        rssm_out = rssm(state, action.unsqueeze(0), belief, encoded.unsqueeze(0)) ## action has to go through RSSM first ? 
+        belief = rssm_out.det_hidden_states[-1]
+        state  = rssm_out.posterior_states[-1]
+        action = actor.mode(belief,state) 
 
-def train_actor_critic(cfg: DictConfig, device: str, env, actor, actor_optim, encoder, critic, critic_optim, rssm, reward_model, experience_replay):
-    '''
-    1. Freeze RSSM.
-    2. Imagination rollout.
-    3. Compute V-lambda.
-    4. Critic loss:
-        A. Zero grad
-        B. Loss
-        C. Loss backward & step
-    5. Actor loss:
-        A. Zero grad
-        B. Loss
-        C. Loss backward & step
-    6. Execute one run with actor.
-    '''
+        action = action + torch.randn_like(action)*0.3 if explore else action
+        action=action.clamp(cfg.min_action,cfg.max_action)
+        next_obs, reward, done = env.step(action[0].cpu())
+    return belief, state, action, next_obs, reward, done
 
-    belief = torch.zeros(1, cfg.belief_size, device=device)  # TODO: needed?
-    state = torch.zeros(1, cfg.state_size, device=device)
+def update_experience(cfg,env,rssm,encoder,actor,experience_replay,device):
+    belief = torch.zeros(1, cfg.belief_size, device=device)
+    state  = torch.zeros(1, cfg.state_size,  device=device)
+    action = torch.zeros(1, env.action_size, device=device)
     observation = env.reset()
     episode_reward = 0.0
+    for _ in tqdm(range(cfg.max_episode_length // cfg.action_repeat)):
+        belief, state, action, next_obs, reward, done = execute_one_run_with_actor(
+            cfg, device, env, rssm, encoder, actor, observation, belief, state,action, explore=True)
+        experience_replay.append(observation, reward, action.squeeze(0).cpu(), done)
+        episode_reward += reward
+        observation = next_obs
+        if done:
+            break
+def train_actor_critic(cfg: DictConfig, device: str,state,belief, env, actor, actor_optim, encoder, critic, critic_optim, rssm, reward_model, experience_replay):
+
 
     with FreezeParameters(rssm):
         states, beliefs, rewards = imagine_rollout(
@@ -151,12 +157,3 @@ def train_actor_critic(cfg: DictConfig, device: str, env, actor, actor_optim, en
     nn.utils.clip_grad_norm_(actor_optim.param_groups[0]['params'], cfg.grad_clip_norm)
     actor_optim.step()
 
-    # Update experience
-    for _ in tqdm(range(cfg.max_episode_length // cfg.action_repeat)):
-        belief, state, action, next_obs, reward, done = execute_one_run_with_actor(
-            cfg, device, env, rssm, encoder, actor, observation, belief, state, explore=True)
-        experience_replay.append(observation, reward, action.squeeze(0).cpu(), done)
-        episode_reward += reward
-        observation = next_obs
-        if done:
-            break
