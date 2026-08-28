@@ -2,7 +2,6 @@ from torch import nn
 from torch.nn import functional as F
 
 
-
 class Encoder(nn.Module):
   def __init__(self, embedding_size, non_linearity='relu'):
     super().__init__()

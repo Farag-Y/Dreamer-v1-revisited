@@ -1,4 +1,5 @@
 import abc
+
 import cv2
 import numpy as np
 import torch
@@ -110,8 +111,8 @@ class GymEnv(BaseEnv):
 
 class DMControlEnv(BaseEnv):
     def __init__(self, env, seed, max_episode_length, action_repeat, bit_depth):
-        from dm_control import suite
         import mujoco
+        from dm_control import suite
         domain, *task_parts = env.split('-')
         task = '_'.join(task_parts)
         self._env = suite.load(domain, task, task_kwargs={'random': seed})

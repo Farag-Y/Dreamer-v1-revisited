@@ -3,7 +3,6 @@ from torch import nn
 from torch.nn import functional as F
 
 
-
 class RewardModel(nn.Module):
   def __init__(self, belief_size, state_size, hidden_size, non_linearity='relu'):
     super().__init__()

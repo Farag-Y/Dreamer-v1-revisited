@@ -385,7 +385,7 @@ def train(
         typer.echo("Try relaxing your constraints.", err=True)
         raise SystemExit(1)
 
-    typer.echo(f"\nTop offers (sorted by price):")
+    typer.echo("\nTop offers (sorted by price):")
     print_offers_table(offers)
     typer.echo("")
 
@@ -489,7 +489,7 @@ def train(
             typer.echo("  SSH is ready.\n")
             break
         if time.monotonic() >= ssh_deadline:
-            typer.echo(f"ERROR: SSH did not become reachable within 120s.", err=True)
+            typer.echo("ERROR: SSH did not become reachable within 120s.", err=True)
             raise SystemExit(1)
         typer.echo(f"  SSH not ready yet ({ssh_elapsed}s elapsed)...")
         time.sleep(5)

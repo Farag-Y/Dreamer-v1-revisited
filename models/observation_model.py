@@ -3,7 +3,6 @@ from torch import nn
 from torch.nn import functional as F
 
 
-
 class ObservationModel(nn.Module):
   def __init__(self, belief_size, state_size, embedding_size, non_linearity='relu'):
     super().__init__()

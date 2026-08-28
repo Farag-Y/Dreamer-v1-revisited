@@ -1,19 +1,19 @@
 from dataclasses import dataclass, field
-from typing import List
+
 import torch
 
 
 @dataclass
 class Metrics:
-    steps:            List[int]         = field(default_factory=list)
-    episodes:         List[int]         = field(default_factory=list)
-    train_rewards:    List[float]       = field(default_factory=list)
-    test_episodes:    List[int]         = field(default_factory=list)
-    test_rewards:     List[List[float]] = field(default_factory=list)
-    observation_loss: List[float]       = field(default_factory=list)
-    reward_loss:      List[float]       = field(default_factory=list)
-    kl_loss:              List[float]       = field(default_factory=list)
-    overshooting_loss:    List[float]       = field(default_factory=list)
+    steps:            list[int]         = field(default_factory=list)
+    episodes:         list[int]         = field(default_factory=list)
+    train_rewards:    list[float]       = field(default_factory=list)
+    test_episodes:    list[int]         = field(default_factory=list)
+    test_rewards:     list[list[float]] = field(default_factory=list)
+    observation_loss: list[float]       = field(default_factory=list)
+    reward_loss:      list[float]       = field(default_factory=list)
+    kl_loss:              list[float]       = field(default_factory=list)
+    overshooting_loss:    list[float]       = field(default_factory=list)
 
     @property
     def last_episode(self) -> int:

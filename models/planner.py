@@ -1,7 +1,8 @@
 from math import inf
-import torch
 
+import torch
 from torch import nn
+
 
 class Planner(nn.Module):
   def __init__(self, action_size, planning_horizon, optimisation_iters, candidates, top_candidates, transition_model, reward_model, min_action=-inf, max_action=inf):

@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 
 import torch
 from torch import nn
@@ -14,9 +13,9 @@ class RSSMOutput:
     prior_states:       torch.Tensor
     prior_means:        torch.Tensor
     prior_std_devs:     torch.Tensor
-    posterior_states:   Optional[torch.Tensor] = None
-    posterior_means:    Optional[torch.Tensor] = None
-    posterior_std_devs: Optional[torch.Tensor] = None
+    posterior_states:   torch.Tensor | None = None
+    posterior_means:    torch.Tensor | None = None
+    posterior_std_devs: torch.Tensor | None = None
 
 
 class RSSM(nn.Module):
