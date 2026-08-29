@@ -42,12 +42,6 @@ overshooting_reward_scale: 0
 global_kl_beta: 0.0
 free_nats: 3.0
 
-# Planning (CEM)
-planning_horizon: 12
-optimisation_iters: 10
-candidates: 1000
-top_candidates: 100
-
 # Action noise
 action_noise: 0.3
 

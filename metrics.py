@@ -23,6 +23,13 @@ class Metrics:
     def last_step(self) -> int:
         return self.steps[-1] if self.steps else 0
 
+    def record(self, results: list[dict]) -> None:
+        n = len(results)
+        self.kl_loss.append(sum(r['kl_loss'] for r in results) / n)
+        self.observation_loss.append(sum(r['obs_loss'] for r in results) / n)
+        self.reward_loss.append(sum(r['reward_loss'] for r in results) / n)
+        self.overshooting_loss.append(sum(r['overshooting_loss'] for r in results) / n)
+
     def save(self, path: str) -> None:
         torch.save(self, path)
 
