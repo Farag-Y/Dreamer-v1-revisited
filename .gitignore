@@ -116,6 +116,9 @@ dmypy.json
 .pyre/
 
 
+# Local docs
+docs/
+
 # Results
 results/
 

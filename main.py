@@ -25,13 +25,10 @@ TODO:
 4. Add new losses to metrics
 5. [DONE] update saving checkpoints and models
 6. Improve complexity of v lambda computation.
-7. train() discards the episode_reward returned by Dreamer.collect_episode — metrics.train_rewards
-   is never populated during training, so the 'Episode Reward' plot in metrics.png stays empty.
-8. Imagination horizon (H=15 in agent/behavior.py's _imagine_rollout) and gamma/lambda (0.99/0.95
-   in _compute_vlambda) are hardcoded, not read from cfg.
-9. Dreamer.eval() in test() now puts every submodule (decoder/actor/critic included) into eval
-   mode, vs. the original's rssm/reward_model/encoder-only. Confirmed harmless (no Dropout/
-   BatchNorm/LayerNorm anywhere in models/), but worth knowing if a stateful layer is added later.
+7. Record episode reward into metrics.train_rewards during training
+8. Move imagination horizon and gamma/lambda out of hardcoding and into cfg
+9. Scope Dreamer.eval() in test() to match the original modules
+10. Understand actor-then-critic vs critic-then-actor backward order (see docs/actor_critic_backward_fix.md)
 '''
 
 def _run_test_episode(cfg, env, dreamer):
