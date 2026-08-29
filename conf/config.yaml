@@ -26,7 +26,7 @@ state_size: 30
 activation_function: relu
 
 # Optimisation
-learning_rate: 1e-3
+learning_rate: 6e-4 #TODO: Revise on learning rate from paper
 actor_learning_rate: 8e-5
 critic_learning_rate: 8e-5
 learning_rate_schedule: 0

@@ -37,6 +37,7 @@ TODO:
 3.Further clean ups
 4. Add new losses to metrics
 5. update saving checkpoints and models
+6. Improve complexity of v lambda computation.
 '''
 
 def execute_one_run_with_planner(cfg:DictConfig,device:str,env,rssm,encoder,planner,action,observation,belief,state,explore):
@@ -167,7 +168,7 @@ def train_world_model(runs:int,cfg:DictConfig,rssm,decoder_model,reward_model,ac
     for _ in tqdm(range(runs)):
         obs, actions, rewards, nonterminals = experience_replay.sample(cfg.batch_size, cfg.chunk_size)
         losses,belief,state=train_rssm(cfg,rssm,actions,rewards,nonterminals,obs,encoder,reward_model,decoder_model,adam_optim,losses,device)
-        train_actor_critic(cfg, device,state,belief, env, actor, actor_optim, encoder, critic, critic_optim, rssm, reward_model, experience_replay)
+        train_actor_critic(cfg, device,state,belief, actor, actor_optim, critic, critic_optim, rssm, reward_model)
     update_experience(cfg,env,rssm,encoder,actor,experience_replay,device)
     return losses
 

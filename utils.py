@@ -43,7 +43,6 @@ def initialize_models(cfg: DictConfig, device: str, env):
     reward_model = RewardModel(belief_size=cfg.belief_size, state_size=cfg.state_size, hidden_size=cfg.hidden_size).to(device=device)
     encoder = Encoder(embedding_size=cfg.embedding_size).to(device=device)
     parameter_list = list(rssm.parameters()) + list(decoder_model.parameters()) + list(reward_model.parameters()) + list(encoder.parameters())
-    adam_optim = optim.Adam(parameter_list, lr=cfg.learning_rate, eps=cfg.adam_epsilon)
     min_action, max_action = env.action_range
     planner = Planner(
         action_size=env.action_size,
@@ -72,6 +71,7 @@ def initialize_models(cfg: DictConfig, device: str, env):
     ).to(device=device)
     actor_optim = optim.Adam(actor.parameters(), lr=cfg.actor_learning_rate, eps=cfg.adam_epsilon)
     critic_optim = optim.Adam(critic.parameters(), lr=cfg.critic_learning_rate, eps=cfg.adam_epsilon)
+    adam_optim = optim.Adam(parameter_list, lr=cfg.learning_rate, eps=cfg.adam_epsilon)
 
     return rssm, decoder_model, reward_model, encoder, adam_optim, planner, actor, critic, actor_optim, critic_optim
 

@@ -136,7 +136,7 @@ def update_experience(cfg,env,rssm,encoder,actor,experience_replay,device):
         observation = next_obs
         if done:
             break
-def train_actor_critic(cfg: DictConfig, device: str,state,belief, env, actor, actor_optim, encoder, critic, critic_optim, rssm, reward_model, experience_replay):
+def train_actor_critic(cfg: DictConfig, device: str,state,belief, actor, actor_optim, critic, critic_optim, rssm, reward_model):
     state = state.reshape(-1, state.shape[-1]).detach()
     belief = belief.reshape(-1, belief.shape[-1]).detach()
 
