@@ -14,6 +14,7 @@ class Metrics:
     reward_loss:      list[float]       = field(default_factory=list)
     kl_loss:              list[float]       = field(default_factory=list)
     overshooting_loss:    list[float]       = field(default_factory=list)
+    discount_loss:        list[float]       = field(default_factory=list)
 
     @property
     def last_episode(self) -> int:
@@ -29,6 +30,7 @@ class Metrics:
         self.observation_loss.append(sum(r['obs_loss'] for r in results) / n)
         self.reward_loss.append(sum(r['reward_loss'] for r in results) / n)
         # self.overshooting_loss.append(sum(r['overshooting_loss'] for r in results) / n)
+        self.discount_loss.append(sum(r['discount_loss'] for r in results) / n)
 
     def save(self, path: str) -> None:
         torch.save(self, path)

@@ -138,7 +138,12 @@ class WorldModel(nn.Module):
             Normal(rssm_output.prior_means,     rssm_output.prior_std_devs),
         ).sum(dim=-1)
         kl_loss = torch.max(kl_div, free_nats).mean()
-
+        if self.train_discount:
+            discount_logits = model_wrapper(self.discount_model,rssm_output.det_hidden_states,rssm_output.posterior_states,trailing_dims=1)
+            discount_loss = F.binary_cross_entropy_with_logits(discount_logits, true_nonterminals[:-1].squeeze(-1), reduction='none').mean()
+        else:
+            discount_loss = torch.tensor(0.0, device=device)
+        
         decoded_obs = model_wrapper(self.decoder, rssm_output.det_hidden_states, rssm_output.posterior_states, trailing_dims=1)
         obs_loss    = F.mse_loss(decoded_obs, obs[1:], reduction='none').sum((2, 3, 4)).mean()
         reward_loss = F.mse_loss(predicted_reward, rewards[:-1], reduction='none').mean()
@@ -155,11 +160,12 @@ class WorldModel(nn.Module):
         #     device,
         # )
 
-        total_loss = kl_loss + obs_loss + reward_loss 
+        total_loss = kl_loss + obs_loss + reward_loss + discount_loss
         loss_components = {
             'kl_loss': kl_loss.item(),
             'obs_loss': obs_loss.item(),
             'reward_loss': reward_loss.item(),
+            'discount_loss':discount_loss.item(),
         }
         return total_loss, rssm_output, loss_components
 
