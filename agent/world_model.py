@@ -5,6 +5,8 @@ from torch.distributions import Normal
 from torch.distributions.kl import kl_divergence
 from torch.nn import functional as F
 
+from env_wrapper import TERMINATING_ENVS
+from models.discount_model import DiscountModel
 from models.encoder import Encoder
 from models.observation_model import ObservationModel
 from models.reward_model import RewardModel
@@ -85,6 +87,7 @@ class WorldModel(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.device = device
+        self.train_discount = cfg.env in TERMINATING_ENVS
         self.rssm = RSSM(
             state_size=cfg.state_size,
             hidden_size=cfg.hidden_size,
@@ -100,6 +103,7 @@ class WorldModel(nn.Module):
             belief_size=cfg.belief_size, state_size=cfg.state_size, hidden_size=cfg.hidden_size,
         ).to(device=device)
         self.encoder = Encoder(embedding_size=cfg.embedding_size).to(device=device)
+        self.discount_model = DiscountModel(state_size=cfg.state_size,belief_size=cfg.belief_size,hidden_size=cfg.hidden_size,non_linearity=cfg.activation_function).to(device=device)
         self.optimizer = optim.Adam(self.parameters(), lr=cfg.learning_rate, eps=cfg.adam_epsilon)
 
     def observe(
@@ -113,7 +117,12 @@ class WorldModel(nn.Module):
         return self.rssm(init_state, actions, init_belief, encoded_obs, nonterminals)
 
     def compute_loss(
-        self, obs: torch.Tensor, actions: torch.Tensor, rewards: torch.Tensor, nonterminals: torch.Tensor,
+        self,
+        obs: torch.Tensor,
+        actions: torch.Tensor,
+        rewards: torch.Tensor,
+        nonterminals: torch.Tensor,
+        true_nonterminals: torch.Tensor,
     ) -> tuple[torch.Tensor, RSSMOutput, dict[str, float]]:
         cfg, device = self.cfg, self.device
         init_belief = torch.zeros(cfg.batch_size, cfg.belief_size, device=device)
@@ -134,32 +143,36 @@ class WorldModel(nn.Module):
         obs_loss    = F.mse_loss(decoded_obs, obs[1:], reduction='none').sum((2, 3, 4)).mean()
         reward_loss = F.mse_loss(predicted_reward, rewards[:-1], reduction='none').mean()
 
-        overshooting_loss = _latent_overshooting(
-            cfg, self.rssm, self.reward_model,
-            actions[:-1], nonterminals[:-1],
-            rssm_output.posterior_states,
-            rssm_output.posterior_means,
-            rssm_output.posterior_std_devs,
-            rssm_output.det_hidden_states,
-            rewards,
-            free_nats,
-            device,
-        )
+        # overshooting_loss = _latent_overshooting(
+        #     cfg, self.rssm, self.reward_model,
+        #     actions[:-1], nonterminals[:-1],
+        #     rssm_output.posterior_states,
+        #     rssm_output.posterior_means,
+        #     rssm_output.posterior_std_devs,
+        #     rssm_output.det_hidden_states,
+        #     rewards,
+        #     free_nats,
+        #     device,
+        # )
 
-        total_loss = kl_loss + obs_loss + reward_loss + overshooting_loss
+        total_loss = kl_loss + obs_loss + reward_loss 
         loss_components = {
             'kl_loss': kl_loss.item(),
             'obs_loss': obs_loss.item(),
             'reward_loss': reward_loss.item(),
-            'overshooting_loss': overshooting_loss.item(),
         }
         return total_loss, rssm_output, loss_components
 
     def train_step(
-        self, obs: torch.Tensor, actions: torch.Tensor, rewards: torch.Tensor, nonterminals: torch.Tensor,
+        self,
+        obs: torch.Tensor,
+        actions: torch.Tensor,
+        rewards: torch.Tensor,
+        nonterminals: torch.Tensor,
+        true_nonterminals: torch.Tensor,
     ) -> dict[str, torch.Tensor | float]:
         self.optimizer.zero_grad()
-        total_loss, rssm_output, loss_components = self.compute_loss(obs, actions, rewards, nonterminals)
+        total_loss, rssm_output, loss_components = self.compute_loss(obs, actions, rewards, nonterminals, true_nonterminals)
         total_loss.backward()
         nn.utils.clip_grad_norm_(self.optimizer.param_groups[0]['params'], self.cfg.grad_clip_norm)
         self.optimizer.step()

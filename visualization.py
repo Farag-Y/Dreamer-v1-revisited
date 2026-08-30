@@ -24,10 +24,10 @@ def plot_metrics(metrics: Metrics, results_dir: str) -> None:
         axes[0, 2].set_title('Reward Loss')
         axes[0, 2].set_xlabel('Episode')
 
-    if metrics.overshooting_loss:
-        axes[1, 0].plot(metrics.overshooting_loss)
-        axes[1, 0].set_title('Overshooting Loss')
-        axes[1, 0].set_xlabel('Episode')
+    # if metrics.overshooting_loss:
+    #     axes[1, 0].plot(metrics.overshooting_loss)
+    #     axes[1, 0].set_title('Overshooting Loss')
+    #     axes[1, 0].set_xlabel('Episode')
 
     if metrics.train_rewards:
         axes[1, 1].plot(metrics.train_rewards)
