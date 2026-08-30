@@ -68,8 +68,8 @@ def collect_observations(cfg: DictConfig, device: str, env: BaseEnv, metrics: Me
         done = False
         while not done:
             action = env.sample_random_action()
-            next_obs, reward, done = env.step(action)
-            experience_replay.append(observation, reward, action, done)
+            next_obs, reward, done, terminated = env.step(action)
+            experience_replay.append(observation, reward, action, done, terminated)
             observation = next_obs
         metrics.steps.append(env.t + metrics.last_step)
         metrics.episodes.append(metrics.last_episode + 1)

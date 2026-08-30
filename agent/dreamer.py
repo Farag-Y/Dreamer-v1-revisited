@@ -33,7 +33,7 @@ class Dreamer(torch.nn.Module):
         state: torch.Tensor,
         action: torch.Tensor,
         explore: bool,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, float, bool]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, float, bool, bool]:
         with torch.no_grad():
             encoded = self.world_model.encoder(observation.to(self.device))
             rssm_out = self.world_model.observe(action.unsqueeze(0), encoded.unsqueeze(0), belief, state)
@@ -42,8 +42,8 @@ class Dreamer(torch.nn.Module):
             action = self.behavior.act(belief, state, explore)
             min_action, max_action = env.action_range
             action = action.clamp(min_action, max_action)
-            next_obs, reward, done = env.step(action[0].cpu())
-        return belief, state, action, next_obs, reward, done
+            next_obs, reward, done, terminated = env.step(action[0].cpu())
+        return belief, state, action, next_obs, reward, done, terminated
 
     def collect_episode(self, env: BaseEnv, replay: ExperienceReplay, explore: bool = True) -> float:
         cfg = self.cfg
@@ -53,8 +53,9 @@ class Dreamer(torch.nn.Module):
         observation = env.reset()
         episode_reward = 0.0
         for _ in tqdm(range(cfg.max_episode_length // cfg.action_repeat)):
-            belief, state, action, next_obs, reward, done = self.act(env, observation, belief, state, action, explore)
-            replay.append(observation, reward, action.squeeze(0).cpu(), done)
+            belief, state, action, next_obs, reward, done, terminated = self.act(
+                env, observation, belief, state, action, explore)
+            replay.append(observation, reward, action.squeeze(0).cpu(), done, terminated)
             episode_reward += reward
             observation = next_obs
             if done:
@@ -63,7 +64,7 @@ class Dreamer(torch.nn.Module):
 
     def train_on_batch(self, replay: ExperienceReplay) -> dict[str, torch.Tensor | float]:
         cfg = self.cfg
-        obs, actions, rewards, nonterminals = replay.sample(cfg.batch_size, cfg.chunk_size)
-        wm_result = self.world_model.train_step(obs, actions, rewards, nonterminals)
+        obs, actions, rewards, nonterminals, true_nonterminals = replay.sample(cfg.batch_size, cfg.chunk_size)
+        wm_result = self.world_model.train_step(obs, actions, rewards, nonterminals, true_nonterminals)
         self.behavior.train_step(wm_result['state'], wm_result['belief'], self.world_model)
         return wm_result

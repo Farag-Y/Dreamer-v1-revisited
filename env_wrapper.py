@@ -24,7 +24,7 @@ class BaseEnv(abc.ABC):
     def reset(self) -> torch.Tensor: ...
 
     @abc.abstractmethod
-    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, float, bool]: ...
+    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, float, bool, bool]: ...
 
     @abc.abstractmethod
     def render(self) -> None: ...
@@ -67,18 +67,20 @@ class GymEnv(BaseEnv):
         self._seed = None
         return self._images_to_observation(self._env.render(), self.bit_depth)
 
-    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, float, bool]:
+    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, float, bool, bool]:
         action_np = action.detach().numpy()
         reward = 0.0
+        terminated_flag = False
         for _ in range(self.action_repeat):
             _, reward_k, terminated, truncated, _ = self._env.step(action_np)
             reward += reward_k
             self.t += 1
+            terminated_flag = terminated_flag or terminated
             done = terminated or truncated or self.t == self.max_episode_length
             if done:
                 break
         observation = self._images_to_observation(self._env.render(), self.bit_depth)
-        return observation, float(reward), done
+        return observation, float(reward), done, terminated_flag
 
     def render(self) -> None:
         frame = self._env.render()
@@ -133,17 +135,22 @@ class DMControlEnv(BaseEnv):
         self._env.reset()
         return self._images_to_observation(self._render_obs(), self.bit_depth)
 
-    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, float, bool]:
+    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, float, bool, bool]:
         action_np = action.detach().numpy()
         reward = 0.0
+        terminated_flag = False
         for _ in range(self.action_repeat):
             time_step = self._env.step(action_np)
             reward += time_step.reward or 0.0
             self.t += 1
+            # dm_control convention: discount == 0.0 on the last step means genuine
+            # termination; discount == 1.0 (the default) means the episode just ended
+            # (e.g. our own max_episode_length cutoff), not a true terminal state.
+            terminated_flag = terminated_flag or (time_step.last() and time_step.discount == 0.0)
             done = time_step.last() or self.t == self.max_episode_length
             if done:
                 break
-        return self._images_to_observation(self._render_obs(), self.bit_depth), float(reward), done
+        return self._images_to_observation(self._render_obs(), self.bit_depth), float(reward), done, terminated_flag
 
     def render(self) -> None:
         self._disp_renderer.update_scene(self._env.physics.data.ptr)
@@ -212,6 +219,14 @@ GYM_ENVS_MUJOCO = [
 ]
 
 GYM_ENVS = GYM_ENVS_CLASSIC + GYM_ENVS_BOX2D + GYM_ENVS_MUJOCO
+
+#Environments that supports early termination
+TERMINATING_ENVS = {
+    'Hopper-v5', 'Walker2d-v5', 'Humanoid-v5', 'HumanoidStandup-v5',
+    'InvertedPendulum-v5', 'InvertedDoublePendulum-v5',
+    'BipedalWalker-v3', 'BipedalWalkerHardcore-v3', 'CarRacing-v3',
+    'MountainCarContinuous-v0',
+}
 
 DMCONTROL_ENVS = [
     'cartpole-balance', 'cartpole-balance-sparse',

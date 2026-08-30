@@ -38,7 +38,7 @@ def _run_test_episode(cfg: DictConfig, env: BaseEnv, dreamer: Dreamer) -> tuple[
     action = torch.zeros(1, env.action_size, device=dreamer.device)
     episode_reward, frames = 0.0, []
     for _ in range(cfg.max_episode_length // cfg.action_repeat):
-        belief, state, action, observation, reward, done = dreamer.act(
+        belief, state, action, observation, reward, done, _ = dreamer.act(
             env, observation, belief, state, action, explore=False)
         episode_reward += reward
         frames.append(env.render_frame())

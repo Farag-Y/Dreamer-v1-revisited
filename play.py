@@ -108,7 +108,7 @@ def main(cfg: DictConfig) -> None:
         keys = pygame.key.get_pressed()
         action = build_action(keys, action_size, action_min, action_max)
 
-        _, reward, done = env.step(action)
+        _, reward, done, _ = env.step(action)
         episode_reward += reward
         step += 1
 

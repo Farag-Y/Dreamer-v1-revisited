@@ -24,15 +24,19 @@ class ExperienceReplay:
         self.actions = np.empty((experience_size, action_size), dtype=np.float32)
         self.rewards = np.empty((experience_size,), dtype=np.float32)
         self.non_terminals = np.empty((experience_size, 1), dtype=np.float32)
+        self.true_nonterminals = np.empty((experience_size, 1), dtype=np.float32)
         self.idx, self.steps, self.episodes = 0, 0, 0
         self.full = False
         self.size = experience_size
 
-    def append(self, observation: torch.Tensor, reward: float, action: torch.Tensor, done: bool) -> None:
+    def append(
+        self, observation: torch.Tensor, reward: float, action: torch.Tensor, done: bool, terminated: bool,
+    ) -> None:
         self.observations[self.idx] = postprocess_observation(observation.numpy(), self.bit_depth)
         self.rewards[self.idx] = reward
         self.actions[self.idx] = action
         self.non_terminals[self.idx] = not done
+        self.true_nonterminals[self.idx] = not terminated
         self.idx = (self.idx + 1) % self.size
         self.full = self.full or self.idx == 0
         self.steps += 1
@@ -57,7 +61,7 @@ class ExperienceReplay:
 
     def _get_batch(
         self, idxs: list[np.ndarray], batch_size: int, batch_length: int,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         # Stack list of per-sample index arrays into shape (batch_size, batch_length)
         stacked = np.stack(idxs, axis=0)
         obs = torch.as_tensor(self.observations[stacked].astype(np.float32))
@@ -66,11 +70,12 @@ class ExperienceReplay:
         acts = torch.as_tensor(self.actions[stacked]).to(self.device).transpose(0, 1)
         rewards = torch.as_tensor(self.rewards[stacked]).to(self.device).transpose(0, 1)
         non_terminals = torch.as_tensor(self.non_terminals[stacked]).to(self.device).transpose(0, 1)
-        return obs, acts, rewards, non_terminals
+        true_nonterminals = torch.as_tensor(self.true_nonterminals[stacked]).to(self.device).transpose(0, 1)
+        return obs, acts, rewards, non_terminals, true_nonterminals
 
     def sample(
         self, batch_size: int, batch_length: int,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         batch_idxs = self._get_indexes(batch_size, batch_length)
         batches = self._get_batch(batch_idxs, batch_size, batch_length)
         return batches
@@ -79,6 +84,7 @@ class ExperienceReplay:
         torch.save({
             'observations': self.observations, 'actions': self.actions,
             'rewards': self.rewards, 'non_terminals': self.non_terminals,
+            'true_nonterminals': self.true_nonterminals,
             'idx': self.idx, 'steps': self.steps,
             'episodes': self.episodes, 'full': self.full, 'size': self.size,
             'bit_depth': self.bit_depth,
@@ -107,6 +113,7 @@ class ExperienceReplay:
         instance.actions       = data['actions']
         instance.rewards       = data['rewards']
         instance.non_terminals = data['non_terminals']
+        instance.true_nonterminals = data.get('true_nonterminals', np.ones_like(instance.non_terminals))
         instance.idx           = data['idx']
         instance.steps         = data['steps']
         instance.episodes      = data['episodes']
