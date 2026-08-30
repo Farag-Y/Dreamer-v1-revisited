@@ -143,9 +143,6 @@ class DMControlEnv(BaseEnv):
             time_step = self._env.step(action_np)
             reward += time_step.reward or 0.0
             self.t += 1
-            # dm_control convention: discount == 0.0 on the last step means genuine
-            # termination; discount == 1.0 (the default) means the episode just ended
-            # (e.g. our own max_episode_length cutoff), not a true terminal state.
             terminated_flag = terminated_flag or (time_step.last() and time_step.discount == 0.0)
             done = time_step.last() or self.t == self.max_episode_length
             if done:
