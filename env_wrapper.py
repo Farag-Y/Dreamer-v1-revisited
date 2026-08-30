@@ -225,6 +225,10 @@ TERMINATING_ENVS = {
     'MountainCarContinuous-v0',
 }
 
+#TODO: Turning off the discount model behavior for now.
+TERMINATING_ENVS={}
+
+
 DMCONTROL_ENVS = [
     'cartpole-balance', 'cartpole-balance-sparse',
     'cartpole-swingup', 'cartpole-swingup-sparse',

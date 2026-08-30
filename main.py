@@ -28,7 +28,8 @@ TODO:
 7. Record episode reward into metrics.train_rewards during training
 8. Move imagination horizon and gamma/lambda out of hardcoding and into cfg
 9. Scope Dreamer.eval() in test() to match the original modules
-10. Understand actor-then-critic vs critic-then-actor backward order (see docs/actor_critic_backward_fix.md)
+10.[DONE] Understand actor-then-critic vs critic-then-actor backward order (see docs/actor_critic_backward_fix.md)
+11. Add discount model output values to rolling out horizon.
 '''
 
 def _run_test_episode(cfg: DictConfig, env: BaseEnv, dreamer: Dreamer) -> tuple[float, list[np.ndarray]]:

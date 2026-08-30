@@ -4,7 +4,9 @@ import torch
 from omegaconf import DictConfig
 from torch import nn, optim
 
+from env_wrapper import TERMINATING_ENVS
 from models.actor_critic import Actor, Critic
+from models.discount_model import DiscountModel
 from models.reward_model import RewardModel
 from models.rssm import RSSM
 from utils import FreezeParameters
@@ -19,11 +21,15 @@ def _imagine_rollout(
     actor: Actor,
     reward_model: RewardModel,
     rssm: RSSM,
+    discount_model:DiscountModel,
     horizon: int = 15,
+    discount_model_gamma:float=0.99,
+    discount_enabled:bool=False,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     states = [start_state]
     beliefs = [start_belief]
     rewards = []
+    discounts=[]
 
     state = start_state
     belief = start_belief
@@ -32,24 +38,31 @@ def _imagine_rollout(
 
         action = actor.sample(belief, state).unsqueeze(0)
         rssm_out = rssm(state, action, belief)
+        gamma_hat = (
+            torch.sigmoid(discount_model(belief, state)) * discount_model_gamma
+            if discount_enabled
+            else torch.full_like(rewards[-1], discount_model_gamma)
+        )
+
         belief = rssm_out.det_hidden_states[-1]
         state = rssm_out.prior_states[-1]
 
         states.append(state)
         beliefs.append(belief)
+        discounts.append(gamma_hat)
 
     states = torch.stack(states, dim=1)
     beliefs = torch.stack(beliefs, dim=1)
     rewards = torch.stack(rewards, dim=1)
-    return states, beliefs, rewards
-
+    discounts = torch.stack(discounts,dim=1)
+    return states, beliefs, rewards,discounts
 #TODO: Revise again calculation of vlambda !
 def _compute_vlambda(
     states: torch.Tensor,
     beliefs: torch.Tensor,
     rewards: torch.Tensor,
+    discounts: torch.Tensor,
     critic: Critic,
-    gamma: float = 0.99,
     lam: float = 0.95,
 ) -> torch.Tensor:
     batch, H = rewards.shape
@@ -61,8 +74,6 @@ def _compute_vlambda(
             states.reshape(-1, states.shape[-1]),
         ).reshape(batch, H + 1)
 
-    gamma_pows = gamma ** torch.arange(H + 1, device=device, dtype=dtype)
-        
     V_lambda = torch.zeros(batch, H + 1, device=device, dtype=dtype)
     V_lambda[:, H] = values[:, H]
 
@@ -70,10 +81,12 @@ def _compute_vlambda(
         max_k = H - tau
         vl = torch.zeros(batch, device=device, dtype=dtype)
         r_sum = torch.zeros(batch, device=device, dtype=dtype)
+        discount_prod = torch.ones(batch, device=device, dtype=dtype)  # prod_{i=tau}^{tau+k-2} discounts[:,i]
 
         for k in range(1, max_k + 1):
-            r_sum = r_sum + gamma_pows[k - 1] * rewards[:, tau + k - 1]
-            V_kN = r_sum + gamma_pows[k] * values[:, tau + k]
+            r_sum = r_sum + discount_prod * rewards[:, tau + k - 1]
+            discount_prod = discount_prod * discounts[:, tau + k - 1]  # now prod over k terms
+            V_kN = r_sum + discount_prod * values[:, tau + k]
 
             is_final = k == max_k
             weight = lam ** (k - 1) if is_final else (1 - lam) * lam ** (k - 1)
@@ -118,6 +131,8 @@ class ActorCritic(nn.Module):
         ).to(device=device)
         self.actor_optim = optim.Adam(self.actor.parameters(), lr=cfg.actor_learning_rate, eps=cfg.adam_epsilon)
         self.critic_optim = optim.Adam(self.critic.parameters(), lr=cfg.critic_learning_rate, eps=cfg.adam_epsilon)
+        self.discount_enabled = cfg.env in TERMINATING_ENVS
+
 
     def act(self, belief: torch.Tensor, state: torch.Tensor, explore: bool) -> torch.Tensor:
         action = self.actor.mode(belief, state)
@@ -131,11 +146,12 @@ class ActorCritic(nn.Module):
         belief = belief.reshape(-1, belief.shape[-1]).detach()
 
         with FreezeParameters(world_model.rssm):
-            states, beliefs, rewards = _imagine_rollout(
+            states, beliefs, rewards,discounts = _imagine_rollout(
                 start_state=state, start_belief=belief,
-                actor=self.actor, reward_model=world_model.reward_model, rssm=world_model.rssm,horizon=cfg.imagination_horizon
+                actor=self.actor, reward_model=world_model.reward_model, rssm=world_model.rssm,discount_model=world_model.discount_model,
+                horizon=cfg.imagination_horizon,discount_model_gamma=cfg.discount_model_gamma,discount_enabled=self.discount_enabled
             )
-            v_lambda = _compute_vlambda(states, beliefs, rewards, self.critic,cfg.gamma,cfg.lam)
+            v_lambda = _compute_vlambda(states, beliefs, rewards, discounts, self.critic, cfg.lam)
 
         self.actor_optim.zero_grad()
         a_loss = _actor_loss(v_lambda)

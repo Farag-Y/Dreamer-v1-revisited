@@ -25,12 +25,12 @@ hidden_size: 200
 belief_size: 200
 state_size: 30
 activation_function: relu
-gamma: 0.99
 lam: 0.95
 # Optimisation
 learning_rate: 6e-4 #TODO: Revise on learning rate from paper
 actor_learning_rate: 8e-5
 critic_learning_rate: 8e-5
+discount_model_gamma: 0.99
 learning_rate_schedule: 0
 adam_epsilon: 1e-4
 grad_clip_norm: 1000
