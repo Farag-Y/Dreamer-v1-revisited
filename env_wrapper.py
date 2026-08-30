@@ -5,54 +5,54 @@ import numpy as np
 import torch
 
 
-def preprocess_observation_(observation, bit_depth):
+def preprocess_observation_(observation: torch.Tensor, bit_depth: int) -> None:
     observation.div_(2 ** (8 - bit_depth)).floor_().div_(2 ** bit_depth).sub_(0.5)
     observation.add_(torch.rand_like(observation).div_(2 ** bit_depth))
 
 
-def postprocess_observation(observation, bit_depth):
+def postprocess_observation(observation: np.ndarray, bit_depth: int) -> np.ndarray:
     return np.clip(np.floor((observation + 0.5) * 2 ** bit_depth) * 2 ** (8 - bit_depth), 0, 2 ** 8 - 1).astype(np.uint8)
 
 
 class BaseEnv(abc.ABC):
-    def _images_to_observation(self, images, bit_depth):
-        images = torch.tensor(cv2.resize(images, (64, 64), interpolation=cv2.INTER_LINEAR).transpose(2, 0, 1), dtype=torch.float32)
-        preprocess_observation_(images, bit_depth)
-        return images.unsqueeze(dim=0)
+    def _images_to_observation(self, images: np.ndarray, bit_depth: int) -> torch.Tensor:
+        images_t = torch.tensor(cv2.resize(images, (64, 64), interpolation=cv2.INTER_LINEAR).transpose(2, 0, 1), dtype=torch.float32)
+        preprocess_observation_(images_t, bit_depth)
+        return images_t.unsqueeze(dim=0)
 
     @abc.abstractmethod
-    def reset(self): ...
+    def reset(self) -> torch.Tensor: ...
 
     @abc.abstractmethod
-    def step(self, action): ...
+    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, float, bool]: ...
 
     @abc.abstractmethod
-    def render(self): ...
+    def render(self) -> None: ...
 
     @abc.abstractmethod
-    def close(self): ...
-
-    @property
-    @abc.abstractmethod
-    def observation_size(self): ...
+    def close(self) -> None: ...
 
     @property
     @abc.abstractmethod
-    def action_size(self): ...
+    def observation_size(self) -> tuple[int, int, int]: ...
 
     @property
     @abc.abstractmethod
-    def action_range(self): ...
+    def action_size(self) -> int: ...
+
+    @property
+    @abc.abstractmethod
+    def action_range(self) -> tuple[float, float]: ...
 
     @abc.abstractmethod
-    def sample_random_action(self): ...
+    def sample_random_action(self) -> torch.Tensor: ...
 
     @abc.abstractmethod
     def render_frame(self, height: int = 480, width: int = 480) -> np.ndarray: ...
 
 
 class GymEnv(BaseEnv):
-    def __init__(self, env, seed, max_episode_length, action_repeat, bit_depth):
+    def __init__(self, env: str, seed: int, max_episode_length: int, action_repeat: int, bit_depth: int) -> None:
         import gymnasium as gym
         gym.logger.min_level = gym.logger.ERROR
         self._env = gym.make(env, render_mode='rgb_array')
@@ -61,17 +61,17 @@ class GymEnv(BaseEnv):
         self.action_repeat = action_repeat
         self.bit_depth = bit_depth
 
-    def reset(self):
+    def reset(self) -> torch.Tensor:
         self.t = 0
         self._env.reset(seed=self._seed)
         self._seed = None
         return self._images_to_observation(self._env.render(), self.bit_depth)
 
-    def step(self, action):
-        action = action.detach().numpy()
-        reward = 0
+    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, float, bool]:
+        action_np = action.detach().numpy()
+        reward = 0.0
         for _ in range(self.action_repeat):
-            _, reward_k, terminated, truncated, _ = self._env.step(action)
+            _, reward_k, terminated, truncated, _ = self._env.step(action_np)
             reward += reward_k
             self.t += 1
             done = terminated or truncated or self.t == self.max_episode_length
@@ -80,28 +80,28 @@ class GymEnv(BaseEnv):
         observation = self._images_to_observation(self._env.render(), self.bit_depth)
         return observation, float(reward), done
 
-    def render(self):
+    def render(self) -> None:
         frame = self._env.render()
         if frame is not None:
             cv2.imshow('screen', frame[:, :, ::-1])
             cv2.waitKey(1)
 
-    def close(self):
+    def close(self) -> None:
         self._env.close()
 
     @property
-    def observation_size(self):
+    def observation_size(self) -> tuple[int, int, int]:
         return (3, 64, 64)
 
     @property
-    def action_size(self):
+    def action_size(self) -> int:
         return self._env.action_space.shape[0]
 
     @property
-    def action_range(self):
+    def action_range(self) -> tuple[float, float]:
         return float(self._env.action_space.low[0]), float(self._env.action_space.high[0])
 
-    def sample_random_action(self):
+    def sample_random_action(self) -> torch.Tensor:
         return torch.from_numpy(self._env.action_space.sample())
 
     def render_frame(self, height: int = 480, width: int = 480) -> np.ndarray:
@@ -110,7 +110,7 @@ class GymEnv(BaseEnv):
 
 
 class DMControlEnv(BaseEnv):
-    def __init__(self, env, seed, max_episode_length, action_repeat, bit_depth):
+    def __init__(self, env: str, seed: int, max_episode_length: int, action_repeat: int, bit_depth: int) -> None:
         import mujoco
         from dm_control import suite
         domain, *task_parts = env.split('-')
@@ -124,20 +124,20 @@ class DMControlEnv(BaseEnv):
         self._disp_renderer = mujoco.Renderer(model, height=240, width=320)
         self._play_renderer = mujoco.Renderer(model, height=480, width=480)
 
-    def _render_obs(self):
+    def _render_obs(self) -> np.ndarray:
         self._obs_renderer.update_scene(self._env.physics.data.ptr)
         return self._obs_renderer.render()
 
-    def reset(self):
+    def reset(self) -> torch.Tensor:
         self.t = 0
         self._env.reset()
         return self._images_to_observation(self._render_obs(), self.bit_depth)
 
-    def step(self, action):
-        action = action.detach().numpy()
-        reward = 0
+    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, float, bool]:
+        action_np = action.detach().numpy()
+        reward = 0.0
         for _ in range(self.action_repeat):
-            time_step = self._env.step(action)
+            time_step = self._env.step(action_np)
             reward += time_step.reward or 0.0
             self.t += 1
             done = time_step.last() or self.t == self.max_episode_length
@@ -145,7 +145,7 @@ class DMControlEnv(BaseEnv):
                 break
         return self._images_to_observation(self._render_obs(), self.bit_depth), float(reward), done
 
-    def render(self):
+    def render(self) -> None:
         self._disp_renderer.update_scene(self._env.physics.data.ptr)
         frame = self._disp_renderer.render()
         cv2.imshow('screen', frame[:, :, ::-1])
@@ -158,26 +158,26 @@ class DMControlEnv(BaseEnv):
             frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_LINEAR)
         return frame
 
-    def close(self):
+    def close(self) -> None:
         self._obs_renderer.close()
         self._disp_renderer.close()
         self._play_renderer.close()
         self._env.close()
 
     @property
-    def observation_size(self):
+    def observation_size(self) -> tuple[int, int, int]:
         return (3, 64, 64)
 
     @property
-    def action_size(self):
+    def action_size(self) -> int:
         return self._env.action_spec().shape[0]
 
     @property
-    def action_range(self):
+    def action_range(self) -> tuple[float, float]:
         spec = self._env.action_spec()
         return float(spec.minimum[0]), float(spec.maximum[0])
 
-    def sample_random_action(self):
+    def sample_random_action(self) -> torch.Tensor:
         spec = self._env.action_spec()
         action = np.random.uniform(spec.minimum, spec.maximum, spec.shape)
         return torch.from_numpy(action.astype(np.float32))
@@ -226,7 +226,7 @@ DMCONTROL_ENVS = [
 ]
 
 
-def Env(env, seed, max_episode_length, action_repeat, bit_depth):
+def Env(env: str, seed: int, max_episode_length: int, action_repeat: int, bit_depth: int) -> BaseEnv:
     if env in GYM_ENVS:
         return GymEnv(env, seed, max_episode_length, action_repeat, bit_depth)
     elif env in DMCONTROL_ENVS:

@@ -11,7 +11,7 @@ from tqdm import tqdm
 from agent.dreamer import Dreamer
 from checkpoint import load_checkpoint, save_checkpoint, save_experience_replay
 from cloud_storage import upload_config
-from env_wrapper import Env
+from env_wrapper import BaseEnv, Env
 from experience_replay import ExperienceReplay
 from metrics import Metrics
 from utils import collect_observations
@@ -31,7 +31,7 @@ TODO:
 10. Understand actor-then-critic vs critic-then-actor backward order (see docs/actor_critic_backward_fix.md)
 '''
 
-def _run_test_episode(cfg, env, dreamer):
+def _run_test_episode(cfg: DictConfig, env: BaseEnv, dreamer: Dreamer) -> tuple[float, list[np.ndarray]]:
     observation = env.reset()
     belief = torch.zeros(1, cfg.belief_size, device=dreamer.device)
     state  = torch.zeros(1, cfg.state_size,  device=dreamer.device)
@@ -47,8 +47,8 @@ def _run_test_episode(cfg, env, dreamer):
     return episode_reward, frames
 
 
-def test(cfg: DictConfig, dreamer: Dreamer, env,
-         metrics: Metrics, results_dir: str, episode: int = 0):
+def test(cfg: DictConfig, dreamer: Dreamer, env: BaseEnv,
+         metrics: Metrics, results_dir: str, episode: int = 0) -> None:
     dreamer.eval()
     episode_rewards, pad = [], len(str(cfg.test_episodes))
     with torch.no_grad():
@@ -68,7 +68,7 @@ def test(cfg: DictConfig, dreamer: Dreamer, env,
 
 
 def train(cfg: DictConfig, dreamer: Dreamer, experience_replay: ExperienceReplay,
-          metrics: Metrics, env, results_dir: str, r2_prefix: str = ""):
+          metrics: Metrics, env: BaseEnv, results_dir: str, r2_prefix: str = "") -> None:
     for episode in tqdm(range(metrics.last_episode + 1, cfg.episodes + 1), total=cfg.episodes, initial=metrics.last_episode):
         results = [dreamer.train_on_batch(experience_replay) for _ in tqdm(range(cfg.collect_interval))]
         metrics.record(results)

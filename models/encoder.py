@@ -1,9 +1,10 @@
+import torch
 from torch import nn
 from torch.nn import functional as F
 
 
 class Encoder(nn.Module):
-  def __init__(self, embedding_size, non_linearity='relu'):
+  def __init__(self, embedding_size: int, non_linearity: str = 'relu') -> None:
     super().__init__()
     self.act_fn = getattr(F, non_linearity)
     self.embedding_size= embedding_size
@@ -15,7 +16,7 @@ class Encoder(nn.Module):
     self.fc1 = nn.Identity() if embedding_size == 1024 else nn.Linear(1024,embedding_size)
 
 
-  def forward(self,observation):
+  def forward(self, observation: torch.Tensor) -> torch.Tensor:
     hidden = self.act_fn(self.conv1(observation))
     hidden = self.act_fn(self.conv2(hidden))
     hidden = self.act_fn(self.conv3(hidden))

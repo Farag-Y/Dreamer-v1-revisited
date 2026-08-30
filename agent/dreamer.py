@@ -1,12 +1,17 @@
 import torch
+from omegaconf import DictConfig
 from tqdm import tqdm
 
 from agent.behavior import ActorCritic
 from agent.world_model import WorldModel
+from env_wrapper import BaseEnv
+from experience_replay import ExperienceReplay
 
 
 class Dreamer(torch.nn.Module):
-    def __init__(self, world_model: WorldModel, behavior: ActorCritic, cfg, action_size: int, device: str):
+    def __init__(
+        self, world_model: WorldModel, behavior: ActorCritic, cfg: DictConfig, action_size: int, device: str,
+    ) -> None:
         super().__init__()
         self.world_model = world_model
         self.behavior = behavior
@@ -15,12 +20,20 @@ class Dreamer(torch.nn.Module):
         self.device = device
 
     @classmethod
-    def from_config(cls, cfg, env, device: str) -> "Dreamer":
+    def from_config(cls, cfg: DictConfig, env: BaseEnv, device: str) -> "Dreamer":
         world_model = WorldModel(cfg, action_size=env.action_size, device=device)
         behavior = ActorCritic(cfg, action_size=env.action_size, device=device)
         return cls(world_model, behavior, cfg, env.action_size, device)
 
-    def act(self, env, observation, belief, state, action, explore: bool):
+    def act(
+        self,
+        env: BaseEnv,
+        observation: torch.Tensor,
+        belief: torch.Tensor,
+        state: torch.Tensor,
+        action: torch.Tensor,
+        explore: bool,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, float, bool]:
         with torch.no_grad():
             encoded = self.world_model.encoder(observation.to(self.device))
             rssm_out = self.world_model.observe(action.unsqueeze(0), encoded.unsqueeze(0), belief, state)
@@ -32,7 +45,7 @@ class Dreamer(torch.nn.Module):
             next_obs, reward, done = env.step(action[0].cpu())
         return belief, state, action, next_obs, reward, done
 
-    def collect_episode(self, env, replay, explore: bool = True) -> float:
+    def collect_episode(self, env: BaseEnv, replay: ExperienceReplay, explore: bool = True) -> float:
         cfg = self.cfg
         belief = torch.zeros(1, cfg.belief_size, device=self.device)
         state  = torch.zeros(1, cfg.state_size,  device=self.device)
@@ -48,7 +61,7 @@ class Dreamer(torch.nn.Module):
                 break
         return episode_reward
 
-    def train_on_batch(self, replay) -> dict:
+    def train_on_batch(self, replay: ExperienceReplay) -> dict[str, torch.Tensor | float]:
         cfg = self.cfg
         obs, actions, rewards, nonterminals = replay.sample(cfg.batch_size, cfg.chunk_size)
         wm_result = self.world_model.train_step(obs, actions, rewards, nonterminals)

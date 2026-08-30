@@ -6,9 +6,10 @@ seed: 1
 env: finger-spin
 symbolic_env: false
 max_episode_length: 1000
-action_repeat: 2 ##Recommended action repeats : cartpole: 8, reacher: 4, cheetah: 4, finger: 2, cup: 4, walker: 2.
+action_repeat: 2 ## Unlike planet, a constant action repeat for the chosen envs.
 bit_depth: 5
 render: false
+imagination_horizon: 15
 
 # Training
 episodes: 1000
@@ -24,7 +25,8 @@ hidden_size: 200
 belief_size: 200
 state_size: 30
 activation_function: relu
-
+gamma: 0.99
+lam: 0.95
 # Optimisation
 learning_rate: 6e-4 #TODO: Revise on learning rate from paper
 actor_learning_rate: 8e-5

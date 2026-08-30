@@ -1,19 +1,23 @@
+from types import TracebackType
+
 import cv2
 import numpy as np
+import torch
 from omegaconf import DictConfig
 
+from env_wrapper import BaseEnv
 from experience_replay import ExperienceReplay
 from metrics import Metrics
 
 
-def model_wrapper(model, *inputs, trailing_dims=3):
+def model_wrapper(model: torch.nn.Module, *inputs: torch.Tensor, trailing_dims: int = 3) -> torch.Tensor:
     leading = inputs[0].shape[:-trailing_dims]
     reshaped = [obs.reshape(-1, *obs.shape[-trailing_dims:]) for obs in inputs]
     out = model(*reshaped)
     return out.view(*leading, *out.shape[1:])
 
 
-def preprocess_frame(frame, size=64):
+def preprocess_frame(frame: np.ndarray, size: int = 64) -> np.ndarray:
     frame = cv2.resize(frame, (size, size))
     frame = np.transpose(frame, (2, 0, 1))
     return frame.astype(np.float32) / 255.0
@@ -28,16 +32,21 @@ class FreezeParameters:
     or get updated by its optimizer while frozen.
     '''
 
-    def __init__(self, modules):
+    def __init__(self, modules: torch.nn.Module | list[torch.nn.Module] | tuple[torch.nn.Module, ...]) -> None:
         self.modules = modules if isinstance(modules, (list, tuple)) else [modules]
         self.param_states = [p.requires_grad for m in self.modules for p in m.parameters()]
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         for m in self.modules:
             for p in m.parameters():
                 p.requires_grad_(False)
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         i = 0
         for m in self.modules:
             for p in m.parameters():
@@ -45,7 +54,7 @@ class FreezeParameters:
                 i += 1
 
 
-def collect_observations(cfg: DictConfig, device: str, env, metrics: Metrics) -> ExperienceReplay:
+def collect_observations(cfg: DictConfig, device: str, env: BaseEnv, metrics: Metrics) -> ExperienceReplay:
     experience_replay = ExperienceReplay(
         cfg.experience_size,
         observation_size=0,

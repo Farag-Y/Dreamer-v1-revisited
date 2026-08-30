@@ -19,7 +19,16 @@ class RSSMOutput:
 
 
 class RSSM(nn.Module):
-    def __init__(self, state_size, hidden_size, belief_size, action_size, obs_size, non_linearity='relu',std_dev_fn="softplus"):
+    def __init__(
+        self,
+        state_size: int,
+        hidden_size: int,
+        belief_size: int,
+        action_size: int,
+        obs_size: int,
+        non_linearity: str = 'relu',
+        std_dev_fn: str = "softplus",
+    ) -> None:
         super().__init__()
         self.act_fn = getattr(F, non_linearity)
         self.std_dev_fn = getattr(F, std_dev_fn)
@@ -31,7 +40,14 @@ class RSSM(nn.Module):
         self.fc_embed_belief_posterior = nn.Linear(belief_size + obs_size, hidden_size)
         self.fc_state_posterior        = nn.Linear(hidden_size, 2 * state_size)
 
-    def forward(self, prev_state, actions, prev_belief, observations=None, nonterminals=None):
+    def forward(
+        self,
+        prev_state: torch.Tensor,
+        actions: torch.Tensor,
+        prev_belief: torch.Tensor,
+        observations: torch.Tensor | None = None,
+        nonterminals: torch.Tensor | None = None,
+    ) -> RSSMOutput:
         sequence_length = actions.shape[0] +1
         (det_hidden_states, prior_states, prior_means, prior_std_devs,
             posterior_states, posterior_means, posterior_std_devs) = (

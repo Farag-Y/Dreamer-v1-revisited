@@ -6,7 +6,15 @@ from env_wrapper import postprocess_observation, preprocess_observation_
 
 
 class ExperienceReplay:
-    def __init__(self, experience_size, observation_size, image_shape, action_size, bit_depth, device):
+    def __init__(
+        self,
+        experience_size: int,
+        observation_size: int,
+        image_shape: list[int],
+        action_size: int,
+        bit_depth: int,
+        device: str,
+    ) -> None:
         self.device = device
         self.bit_depth = bit_depth
         #TODO: Observation size will only be used in symbolic envs
@@ -20,7 +28,7 @@ class ExperienceReplay:
         self.full = False
         self.size = experience_size
 
-    def append(self, observation, reward, action, done):
+    def append(self, observation: torch.Tensor, reward: float, action: torch.Tensor, done: bool) -> None:
         self.observations[self.idx] = postprocess_observation(observation.numpy(), self.bit_depth)
         self.rewards[self.idx] = reward
         self.actions[self.idx] = action
@@ -47,7 +55,9 @@ class ExperienceReplay:
             batches.append(idxs)
         return batches
 
-    def _get_batch(self, idxs, batch_size, batch_length):
+    def _get_batch(
+        self, idxs: list[np.ndarray], batch_size: int, batch_length: int,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         # Stack list of per-sample index arrays into shape (batch_size, batch_length)
         stacked = np.stack(idxs, axis=0)
         obs = torch.as_tensor(self.observations[stacked].astype(np.float32))
@@ -58,7 +68,9 @@ class ExperienceReplay:
         non_terminals = torch.as_tensor(self.non_terminals[stacked]).to(self.device).transpose(0, 1)
         return obs, acts, rewards, non_terminals
 
-    def sample(self, batch_size, batch_length):
+    def sample(
+        self, batch_size: int, batch_length: int,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         batch_idxs = self._get_indexes(batch_size, batch_length)
         batches = self._get_batch(batch_idxs, batch_size, batch_length)
         return batches

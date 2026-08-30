@@ -1,4 +1,5 @@
 import torch
+from omegaconf import DictConfig
 from torch import nn, optim
 from torch.distributions import Normal
 from torch.distributions.kl import kl_divergence
@@ -11,9 +12,20 @@ from models.rssm import RSSM, RSSMOutput
 from utils import model_wrapper
 
 
-def _latent_overshooting(cfg, rssm, reward_model, actions, nonterminals,
-                          posterior_states, posterior_means, posterior_std_devs,
-                          rssm_beliefs, rewards, free_nats, device):
+def _latent_overshooting(
+    cfg: DictConfig,
+    rssm: RSSM,
+    reward_model: RewardModel,
+    actions: torch.Tensor,
+    nonterminals: torch.Tensor,
+    posterior_states: torch.Tensor,
+    posterior_means: torch.Tensor,
+    posterior_std_devs: torch.Tensor,
+    rssm_beliefs: torch.Tensor,
+    rewards: torch.Tensor,
+    free_nats: torch.Tensor,
+    device: str,
+) -> torch.Tensor:
     if cfg.overshooting_kl_beta == 0:
         return torch.tensor(0.0, device=device)
 
@@ -69,7 +81,7 @@ def _latent_overshooting(cfg, rssm, reward_model, actions, nonterminals,
 
 
 class WorldModel(nn.Module):
-    def __init__(self, cfg, action_size: int, device: str):
+    def __init__(self, cfg: DictConfig, action_size: int, device: str) -> None:
         super().__init__()
         self.cfg = cfg
         self.device = device
@@ -90,10 +102,19 @@ class WorldModel(nn.Module):
         self.encoder = Encoder(embedding_size=cfg.embedding_size).to(device=device)
         self.optimizer = optim.Adam(self.parameters(), lr=cfg.learning_rate, eps=cfg.adam_epsilon)
 
-    def observe(self, actions, encoded_obs, init_belief, init_state, nonterminals=None) -> RSSMOutput:
+    def observe(
+        self,
+        actions: torch.Tensor,
+        encoded_obs: torch.Tensor,
+        init_belief: torch.Tensor,
+        init_state: torch.Tensor,
+        nonterminals: torch.Tensor | None = None,
+    ) -> RSSMOutput:
         return self.rssm(init_state, actions, init_belief, encoded_obs, nonterminals)
 
-    def compute_loss(self, obs, actions, rewards, nonterminals):
+    def compute_loss(
+        self, obs: torch.Tensor, actions: torch.Tensor, rewards: torch.Tensor, nonterminals: torch.Tensor,
+    ) -> tuple[torch.Tensor, RSSMOutput, dict[str, float]]:
         cfg, device = self.cfg, self.device
         init_belief = torch.zeros(cfg.batch_size, cfg.belief_size, device=device)
         init_state  = torch.zeros(cfg.batch_size, cfg.state_size,  device=device)
@@ -134,7 +155,9 @@ class WorldModel(nn.Module):
         }
         return total_loss, rssm_output, loss_components
 
-    def train_step(self, obs, actions, rewards, nonterminals) -> dict:
+    def train_step(
+        self, obs: torch.Tensor, actions: torch.Tensor, rewards: torch.Tensor, nonterminals: torch.Tensor,
+    ) -> dict[str, torch.Tensor | float]:
         self.optimizer.zero_grad()
         total_loss, rssm_output, loss_components = self.compute_loss(obs, actions, rewards, nonterminals)
         total_loss.backward()

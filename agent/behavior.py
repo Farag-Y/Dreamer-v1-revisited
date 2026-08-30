@@ -1,11 +1,26 @@
+from typing import TYPE_CHECKING
+
 import torch
+from omegaconf import DictConfig
 from torch import nn, optim
 
 from models.actor_critic import Actor, Critic
+from models.reward_model import RewardModel
+from models.rssm import RSSM
 from utils import FreezeParameters
 
+if TYPE_CHECKING:
+    from agent.world_model import WorldModel
 
-def _imagine_rollout(start_state, start_belief, actor, reward_model, rssm, horizon=15):
+
+def _imagine_rollout(
+    start_state: torch.Tensor,
+    start_belief: torch.Tensor,
+    actor: Actor,
+    reward_model: RewardModel,
+    rssm: RSSM,
+    horizon: int = 15,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     states = [start_state]
     beliefs = [start_belief]
     rewards = []
@@ -29,7 +44,14 @@ def _imagine_rollout(start_state, start_belief, actor, reward_model, rssm, horiz
     return states, beliefs, rewards
 
 #TODO: Revise again calculation of vlambda !
-def _compute_vlambda(states, beliefs, rewards, critic, gamma=0.99, lam=0.95):
+def _compute_vlambda(
+    states: torch.Tensor,
+    beliefs: torch.Tensor,
+    rewards: torch.Tensor,
+    critic: Critic,
+    gamma: float = 0.99,
+    lam: float = 0.95,
+) -> torch.Tensor:
     batch, H = rewards.shape
     device, dtype = states.device, states.dtype
 
@@ -61,7 +83,9 @@ def _compute_vlambda(states, beliefs, rewards, critic, gamma=0.99, lam=0.95):
     return V_lambda
 
 
-def _critic_loss(states, beliefs, v_lambda, critic):
+def _critic_loss(
+    states: torch.Tensor, beliefs: torch.Tensor, v_lambda: torch.Tensor, critic: Critic,
+) -> torch.Tensor:
     batch, T = states.shape[:2]
     v_pred = critic(
         beliefs.detach().reshape(-1, beliefs.shape[-1]),
@@ -71,12 +95,12 @@ def _critic_loss(states, beliefs, v_lambda, critic):
     return 0.5 * (v_pred - target).pow(2).mean()
 
 
-def _actor_loss(v_lambda):
+def _actor_loss(v_lambda: torch.Tensor) -> torch.Tensor:
     return -v_lambda.mean()
 
 
 class ActorCritic(nn.Module):
-    def __init__(self, cfg, action_size: int, device: str):
+    def __init__(self, cfg: DictConfig, action_size: int, device: str) -> None:
         super().__init__()
         self.cfg = cfg
         self.actor = Actor(
@@ -95,13 +119,13 @@ class ActorCritic(nn.Module):
         self.actor_optim = optim.Adam(self.actor.parameters(), lr=cfg.actor_learning_rate, eps=cfg.adam_epsilon)
         self.critic_optim = optim.Adam(self.critic.parameters(), lr=cfg.critic_learning_rate, eps=cfg.adam_epsilon)
 
-    def act(self, belief, state, explore: bool) -> torch.Tensor:
+    def act(self, belief: torch.Tensor, state: torch.Tensor, explore: bool) -> torch.Tensor:
         action = self.actor.mode(belief, state)
         if explore:
             action = action + self.cfg.action_noise * torch.randn_like(action)
         return action
 
-    def train_step(self, state, belief, world_model) -> None:
+    def train_step(self, state: torch.Tensor, belief: torch.Tensor, world_model: "WorldModel") -> None:
         cfg = self.cfg
         state = state.reshape(-1, state.shape[-1]).detach()
         belief = belief.reshape(-1, belief.shape[-1]).detach()
@@ -109,9 +133,9 @@ class ActorCritic(nn.Module):
         with FreezeParameters(world_model.rssm):
             states, beliefs, rewards = _imagine_rollout(
                 start_state=state, start_belief=belief,
-                actor=self.actor, reward_model=world_model.reward_model, rssm=world_model.rssm,
+                actor=self.actor, reward_model=world_model.reward_model, rssm=world_model.rssm,horizon=cfg.imagination_horizon
             )
-            v_lambda = _compute_vlambda(states, beliefs, rewards, self.critic)
+            v_lambda = _compute_vlambda(states, beliefs, rewards, self.critic,cfg.gamma,cfg.lam)
 
         self.actor_optim.zero_grad()
         a_loss = _actor_loss(v_lambda)
