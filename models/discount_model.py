@@ -28,7 +28,3 @@ class DiscountModel(nn.Module):
     value = self.fc4(hidden)
     return value.squeeze(-1)
   
-  def predicted_discount(self,s,gamma=0.99):   
-    cont_prob = torch.sigmoid(self.forward(s))
-    return cont_prob * gamma
-

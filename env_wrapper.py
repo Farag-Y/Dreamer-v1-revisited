@@ -225,8 +225,7 @@ TERMINATING_ENVS = {
     'MountainCarContinuous-v0',
 }
 
-#TODO: Turning off the discount model behavior for now.
-TERMINATING_ENVS={}
+
 
 
 DMCONTROL_ENVS = [
