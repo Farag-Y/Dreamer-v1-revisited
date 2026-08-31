@@ -22,14 +22,8 @@ TODO:
 1. [DONE] Remove the old CEM planner
 2. Unify var nams between deterministic state of RSSM with 'belief'
 3. Further clean ups
-4. Add new losses to metrics
-5. [DONE] update saving checkpoints and models
 6. Improve complexity of v lambda computation.
-7. Record episode reward into metrics.train_rewards during training
-8. Move imagination horizon and gamma/lambda out of hardcoding and into cfg
 9. Scope Dreamer.eval() in test() to match the original modules
-10.[DONE] Understand actor-then-critic vs critic-then-actor backward order (see docs/actor_critic_backward_fix.md)
-11. Add discount model output values to rolling out horizon.
 '''
 
 def _run_test_episode(cfg: DictConfig, env: BaseEnv, dreamer: Dreamer) -> tuple[float, list[np.ndarray]]:
@@ -73,7 +67,8 @@ def train(cfg: DictConfig, dreamer: Dreamer, experience_replay: ExperienceReplay
     for episode in tqdm(range(metrics.last_episode + 1, cfg.episodes + 1), total=cfg.episodes, initial=metrics.last_episode):
         results = [dreamer.train_on_batch(experience_replay) for _ in tqdm(range(cfg.collect_interval))]
         metrics.record(results)
-        dreamer.collect_episode(env, experience_replay, explore=True)
+        episode_reward = dreamer.collect_episode(env, experience_replay, explore=True)
+        metrics.train_rewards.append(episode_reward)
         plot_metrics(metrics, results_dir)
         if episode % cfg.checkpoint_interval == 0:
             save_checkpoint(cfg, episode, dreamer, metrics, results_dir, r2_prefix=r2_prefix)

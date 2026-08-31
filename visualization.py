@@ -6,7 +6,7 @@ from metrics import Metrics
 
 
 def plot_metrics(metrics: Metrics, results_dir: str) -> None:
-    fig, axes = plt.subplots(2, 3, figsize=(18, 8))
+    fig, axes = plt.subplots(2, 4, figsize=(24, 8))
     fig.suptitle(f'Training Metrics — Episode {metrics.last_episode}')
 
     if metrics.kl_loss:
@@ -23,6 +23,11 @@ def plot_metrics(metrics: Metrics, results_dir: str) -> None:
         axes[0, 2].plot(metrics.reward_loss)
         axes[0, 2].set_title('Reward Loss')
         axes[0, 2].set_xlabel('Episode')
+
+    if metrics.actor_loss:
+        axes[0, 3].plot(metrics.actor_loss)
+        axes[0, 3].set_title('Actor Loss')
+        axes[0, 3].set_xlabel('Episode')
 
     # if metrics.overshooting_loss:
     #     axes[1, 0].plot(metrics.overshooting_loss)
@@ -46,6 +51,11 @@ def plot_metrics(metrics: Metrics, results_dir: str) -> None:
         axes[1, 2].set_xlabel('Episode')
     else:
         axes[1, 2].axis('off')
+
+    if metrics.critic_loss:
+        axes[1, 3].plot(metrics.critic_loss)
+        axes[1, 3].set_title('Critic Loss')
+        axes[1, 3].set_xlabel('Episode')
 
     plt.tight_layout()
     plt.savefig(os.path.join(results_dir, 'metrics.png'))

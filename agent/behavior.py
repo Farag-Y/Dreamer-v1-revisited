@@ -140,7 +140,7 @@ class ActorCritic(nn.Module):
             action = action + self.cfg.action_noise * torch.randn_like(action)
         return action
 
-    def train_step(self, state: torch.Tensor, belief: torch.Tensor, world_model: "WorldModel") -> None:
+    def train_step(self, state: torch.Tensor, belief: torch.Tensor, world_model: "WorldModel") -> dict[str, float]:
         cfg = self.cfg
         state = state.reshape(-1, state.shape[-1]).detach()
         belief = belief.reshape(-1, belief.shape[-1]).detach()
@@ -164,3 +164,5 @@ class ActorCritic(nn.Module):
         c_loss.backward()
         nn.utils.clip_grad_norm_(self.critic_optim.param_groups[0]['params'], cfg.grad_clip_norm)
         self.critic_optim.step()
+
+        return {'actor_loss': a_loss.item(), 'critic_loss': c_loss.item()}

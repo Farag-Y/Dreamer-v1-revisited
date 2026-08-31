@@ -66,5 +66,5 @@ class Dreamer(torch.nn.Module):
         cfg = self.cfg
         obs, actions, rewards, nonterminals, true_nonterminals = replay.sample(cfg.batch_size, cfg.chunk_size)
         wm_result = self.world_model.train_step(obs, actions, rewards, nonterminals, true_nonterminals)
-        self.behavior.train_step(wm_result['state'], wm_result['belief'], self.world_model)
-        return wm_result
+        behavior_result = self.behavior.train_step(wm_result['state'], wm_result['belief'], self.world_model)
+        return {**wm_result, **behavior_result}
