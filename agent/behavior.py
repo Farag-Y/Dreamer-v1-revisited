@@ -119,15 +119,15 @@ class ActorCritic(nn.Module):
         self.actor = Actor(
             belief_size=cfg.belief_size,
             state_size=cfg.state_size,
-            hidden_size=cfg.hidden_size,
+            hidden_size=cfg.dense_hidden_size,
             action_size=action_size,
-            non_linearity=cfg.activation_function,
+            non_linearity=cfg.dense_activation_function,
         ).to(device=device)
         self.critic = Critic(
             belief_size=cfg.belief_size,
             state_size=cfg.state_size,
-            hidden_size=cfg.hidden_size,
-            non_linearity=cfg.activation_function,
+            hidden_size=cfg.dense_hidden_size,
+            non_linearity=cfg.dense_activation_function,
         ).to(device=device)
         self.actor_optim = optim.Adam(self.actor.parameters(), lr=cfg.actor_learning_rate, eps=cfg.adam_epsilon)
         self.critic_optim = optim.Adam(self.critic.parameters(), lr=cfg.critic_learning_rate, eps=cfg.adam_epsilon)

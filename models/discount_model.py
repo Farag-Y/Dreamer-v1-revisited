@@ -11,7 +11,7 @@ class DiscountModel(nn.Module):
       belief_size: int,
       state_size: int,
       hidden_size:int,
-      non_linearity: str = 'relu',#TODO: ELU instead of relu for dreamer ?
+      non_linearity: str = 'relu',
   ) -> None:
     super().__init__()
     self.act_fn = getattr(F, non_linearity)

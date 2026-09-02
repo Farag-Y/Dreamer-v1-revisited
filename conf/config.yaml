@@ -3,7 +3,7 @@ id: default
 seed: 1
 
 # Environment
-env: finger-spin
+env: cartpole-swingup
 symbolic_env: false
 max_episode_length: 1000
 action_repeat: 2 ## Unlike planet, a constant action repeat for the chosen envs.
@@ -21,10 +21,12 @@ experience_size: 100000
 
 # Model
 embedding_size: 1024
-hidden_size: 200
+hidden_size: 200 #TODO: Check RSSM for dreamer is also still 200
 belief_size: 200
 state_size: 30
 activation_function: relu
+dense_hidden_size: 300  # reward/actor/critic/discount models: 3 dense layers of size 300 per Dreamer paper
+dense_activation_function: elu 
 lam: 0.95
 # Optimisation
 learning_rate: 6e-4 #TODO: Revise on learning rate from paper
@@ -33,7 +35,7 @@ critic_learning_rate: 8e-5
 discount_model_gamma: 0.99
 learning_rate_schedule: 0
 adam_epsilon: 1e-4
-grad_clip_norm: 1000
+grad_clip_norm: 100
 
 # Overshooting
 overshooting_distance: 50

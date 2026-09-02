@@ -19,11 +19,12 @@ from visualization import plot_metrics, write_video
 
 '''
 TODO:
-1. [DONE] Remove the old CEM planner
 2. Unify var nams between deterministic state of RSSM with 'belief'
 3. Further clean ups
 6. Improve complexity of v lambda computation.
 9. Scope Dreamer.eval() in test() to match the original modules
+10. Check nonlinearity RELU or GRU
+11. Check discrete control abalation for anything missing
 '''
 
 def _run_test_episode(cfg: DictConfig, env: BaseEnv, dreamer: Dreamer) -> tuple[float, list[np.ndarray]]:
