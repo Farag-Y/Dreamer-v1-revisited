@@ -6,7 +6,7 @@ from metrics import Metrics
 
 
 def plot_metrics(metrics: Metrics, results_dir: str) -> None:
-    fig, axes = plt.subplots(2, 4, figsize=(24, 8))
+    fig, axes = plt.subplots(3, 3, figsize=(18, 12))
     fig.suptitle(f'Training Metrics — Episode {metrics.last_episode}')
 
     if metrics.kl_loss:
@@ -25,37 +25,39 @@ def plot_metrics(metrics: Metrics, results_dir: str) -> None:
         axes[0, 2].set_xlabel('Episode')
 
     if metrics.actor_loss:
-        axes[0, 3].plot(metrics.actor_loss)
-        axes[0, 3].set_title('Actor Loss')
-        axes[0, 3].set_xlabel('Episode')
-
-    # if metrics.overshooting_loss:
-    #     axes[1, 0].plot(metrics.overshooting_loss)
-    #     axes[1, 0].set_title('Overshooting Loss')
-    #     axes[1, 0].set_xlabel('Episode')
-
-    if metrics.discount_loss:
-        axes[1, 0].plot(metrics.discount_loss)
-        axes[1, 0].set_title('Discount Loss')
+        axes[1, 0].plot(metrics.actor_loss)
+        axes[1, 0].set_title('Actor Loss')
         axes[1, 0].set_xlabel('Episode')
 
-    if metrics.train_rewards:
-        axes[1, 1].plot(metrics.train_rewards)
-        axes[1, 1].set_title('Episode Reward')
+    if metrics.critic_loss:
+        axes[1, 1].plot(metrics.critic_loss)
+        axes[1, 1].set_title('Critic Loss')
         axes[1, 1].set_xlabel('Episode')
+
+    if metrics.discount_loss:
+        axes[1, 2].plot(metrics.discount_loss)
+        axes[1, 2].set_title('Discount Loss')
+        axes[1, 2].set_xlabel('Episode')
+
+    if metrics.train_rewards:
+        axes[2, 0].plot(metrics.train_rewards)
+        axes[2, 0].set_title('Episode Reward')
+        axes[2, 0].set_xlabel('Episode')
 
     if metrics.test_rewards:
         avg_test = [sum(ep) / len(ep) for ep in metrics.test_rewards]
-        axes[1, 2].plot(metrics.test_episodes, avg_test)
-        axes[1, 2].set_title('Avg Test Reward')
-        axes[1, 2].set_xlabel('Episode')
+        axes[2, 1].plot(metrics.test_episodes, avg_test)
+        axes[2, 1].set_title('Avg Test Reward')
+        axes[2, 1].set_xlabel('Episode')
     else:
-        axes[1, 2].axis('off')
+        axes[2, 1].axis('off')
 
-    if metrics.critic_loss:
-        axes[1, 3].plot(metrics.critic_loss)
-        axes[1, 3].set_title('Critic Loss')
-        axes[1, 3].set_xlabel('Episode')
+    if metrics.train_env_steps:
+        axes[2, 2].plot(metrics.train_env_steps, metrics.train_rewards)
+        axes[2, 2].set_title('Episode Reward')
+        axes[2, 2].set_xlabel('Environment Steps')
+    else:
+        axes[2, 2].axis('off')
 
     plt.tight_layout()
     plt.savefig(os.path.join(results_dir, 'metrics.png'))

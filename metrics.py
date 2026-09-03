@@ -8,6 +8,7 @@ class Metrics:
     steps:            list[int]         = field(default_factory=list)
     episodes:         list[int]         = field(default_factory=list)
     train_rewards:    list[float]       = field(default_factory=list)
+    train_env_steps:  list[int]         = field(default_factory=list)
     test_episodes:    list[int]         = field(default_factory=list)
     test_rewards:     list[list[float]] = field(default_factory=list)
     observation_loss: list[float]       = field(default_factory=list)

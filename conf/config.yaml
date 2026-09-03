@@ -3,7 +3,7 @@ id: default
 seed: 1
 
 # Environment
-env: cartpole-swingup
+env: cartpole-swingup-sparse
 symbolic_env: false
 max_episode_length: 1000
 action_repeat: 2 ## Unlike planet, a constant action repeat for the chosen envs.

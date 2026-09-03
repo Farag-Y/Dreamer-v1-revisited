@@ -70,6 +70,8 @@ def train(cfg: DictConfig, dreamer: Dreamer, experience_replay: ExperienceReplay
         metrics.record(results)
         episode_reward = dreamer.collect_episode(env, experience_replay, explore=True)
         metrics.train_rewards.append(episode_reward)
+        prev_env_steps = metrics.train_env_steps[-1] if metrics.train_env_steps else metrics.last_step
+        metrics.train_env_steps.append(prev_env_steps + env.t)
         plot_metrics(metrics, results_dir)
         if episode % cfg.checkpoint_interval == 0:
             save_checkpoint(cfg, episode, dreamer, metrics, results_dir, r2_prefix=r2_prefix)
