@@ -24,8 +24,12 @@ embedding_size: 1024
 hidden_size: 200 #TODO: Check RSSM for dreamer is also still 200
 belief_size: 200
 state_size: 30
-activation_function: relu
-dense_hidden_size: 300  # reward/actor/critic/discount models: 3 dense layers of size 300 per Dreamer paper
+activation_function: elu  # RSSM activation; reference is always ELU here, never configurable/ReLU
+dense_hidden_size: 400  # reward/actor/critic/discount models width. NOTE: the Dreamer v1 paper text says
+# "three dense layers of size 300" for all non-encoder/decoder/RSSM networks, but the paper and the
+# released reference implementation (danijar/dreamer, dreamer.py:_build_model) do not agree: the actual
+# code uses num_units=400 everywhere, and varies depth per network (reward=2 hidden layers, value=3,
+# discount/pcont=3, actor=4 hidden layers - not a uniform 3 for all).
 dense_activation_function: elu 
 lam: 0.95
 # Optimisation

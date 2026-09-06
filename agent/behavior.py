@@ -135,9 +135,11 @@ class ActorCritic(nn.Module):
 
 
     def act(self, belief: torch.Tensor, state: torch.Tensor, explore: bool) -> torch.Tensor:
-        action = self.actor.mode(belief, state)
         if explore:
+            action = self.actor.sample(belief, state)
             action = action + self.cfg.action_noise * torch.randn_like(action)
+        else:
+            action = self.actor.mode(belief, state)
         return action
 
     def train_step(self, state: torch.Tensor, belief: torch.Tensor, world_model: "WorldModel") -> dict[str, float]:
