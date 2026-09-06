@@ -138,7 +138,7 @@ class WorldModel(nn.Module):
             Normal(rssm_output.posterior_means, rssm_output.posterior_std_devs),
             Normal(rssm_output.prior_means,     rssm_output.prior_std_devs),
         ).sum(dim=-1)
-        kl_loss = torch.max(kl_div, free_nats).mean()
+        kl_loss = torch.max(kl_div.mean(), free_nats.squeeze())
         if self.train_discount:
             discount_logits = model_wrapper(self.discount_model,rssm_output.det_hidden_states,rssm_output.posterior_states,trailing_dims=1)
             discount_loss = F.binary_cross_entropy_with_logits(discount_logits, true_nonterminals[:-1].squeeze(-1), reduction='none').mean()
