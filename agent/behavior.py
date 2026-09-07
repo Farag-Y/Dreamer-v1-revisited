@@ -36,7 +36,7 @@ def _imagine_rollout(
     for _ in range(horizon):
         rewards.append(reward_model(belief, state))
 
-        action = actor.sample(belief, state).unsqueeze(0)
+        action = actor.sample(belief.detach(), state.detach()).unsqueeze(0)
         rssm_out = rssm(state, action, belief)
         gamma_hat = (
             torch.sigmoid(discount_model(belief, state)) * discount_model_gamma
