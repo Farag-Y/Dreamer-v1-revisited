@@ -155,10 +155,6 @@ class ActorCritic(nn.Module):
             )
             v_lambda = _compute_vlambda(states, beliefs, rewards, discounts, self.critic, cfg.lam)
 
-        # Drop tau=0 (reward/value at the real starting state, before any imagined
-        # action - zero gradient w.r.t. the actor) and tau=H (pure bootstrap, no
-        # lambda-mixing) from both losses, matching the reference's reward[:-1]/
-        # value[:-1] slicing.
         states_mid  = states[:, 1:-1]
         beliefs_mid = beliefs[:, 1:-1]
         v_lambda_mid = v_lambda[:, 1:-1]
