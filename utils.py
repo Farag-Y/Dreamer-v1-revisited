@@ -60,7 +60,6 @@ def collect_observations(cfg: DictConfig, device: str, env: BaseEnv, metrics: Me
         observation_size=0,
         image_shape=list(env.observation_size),
         action_size=env.action_size,
-        bit_depth=cfg.bit_depth,
         device=device,
     )
     for s in range(1, cfg.seed_episodes + 1):

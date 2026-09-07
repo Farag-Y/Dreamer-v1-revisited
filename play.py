@@ -65,7 +65,7 @@ def draw_overlay(surface, font, small_font, cfg_env, action, action_size, episod
 @hydra.main(config_path="conf", config_name="config", version_base=None)
 def main(cfg: DictConfig) -> None:
     env = Env(cfg.env, seed=cfg.seed, max_episode_length=cfg.max_episode_length,
-              action_repeat=1, bit_depth=cfg.bit_depth)
+              action_repeat=1)
 
     action_size = env.action_size
     action_min, action_max = env.action_range

@@ -155,14 +155,22 @@ class ActorCritic(nn.Module):
             )
             v_lambda = _compute_vlambda(states, beliefs, rewards, discounts, self.critic, cfg.lam)
 
+        # Drop tau=0 (reward/value at the real starting state, before any imagined
+        # action - zero gradient w.r.t. the actor) and tau=H (pure bootstrap, no
+        # lambda-mixing) from both losses, matching the reference's reward[:-1]/
+        # value[:-1] slicing.
+        states_mid  = states[:, 1:-1]
+        beliefs_mid = beliefs[:, 1:-1]
+        v_lambda_mid = v_lambda[:, 1:-1]
+
         self.actor_optim.zero_grad()
-        a_loss = _actor_loss(v_lambda)
+        a_loss = _actor_loss(v_lambda_mid)
         a_loss.backward()
         nn.utils.clip_grad_norm_(self.actor_optim.param_groups[0]['params'], cfg.grad_clip_norm)
         self.actor_optim.step()
 
         self.critic_optim.zero_grad()
-        c_loss = _critic_loss(states, beliefs, v_lambda, self.critic)
+        c_loss = _critic_loss(states_mid, beliefs_mid, v_lambda_mid, self.critic)
         c_loss.backward()
         nn.utils.clip_grad_norm_(self.critic_optim.param_groups[0]['params'], cfg.grad_clip_norm)
         self.critic_optim.step()

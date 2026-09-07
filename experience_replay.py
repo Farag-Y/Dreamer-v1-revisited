@@ -12,14 +12,11 @@ class ExperienceReplay:
         observation_size: int,
         image_shape: list[int],
         action_size: int,
-        bit_depth: int,
         device: str,
     ) -> None:
         self.device = device
-        self.bit_depth = bit_depth
         #TODO: Observation size will only be used in symbolic envs
-        # Observations are stored quantised as uint8 (4x less memory than float32);
-        # dequantisation noise is re-sampled on every batch in _get_batch
+        # Observations are stored quantised as uint8 (4x less memory than float32)
         self.observations = np.empty((experience_size, image_shape[0], image_shape[1], image_shape[2]), dtype=np.uint8)
         self.actions = np.empty((experience_size, action_size), dtype=np.float32)
         self.rewards = np.empty((experience_size,), dtype=np.float32)
@@ -32,7 +29,7 @@ class ExperienceReplay:
     def append(
         self, observation: torch.Tensor, reward: float, action: torch.Tensor, done: bool, terminated: bool,
     ) -> None:
-        self.observations[self.idx] = postprocess_observation(observation.numpy(), self.bit_depth)
+        self.observations[self.idx] = postprocess_observation(observation.numpy())
         self.rewards[self.idx] = reward
         self.actions[self.idx] = action
         self.non_terminals[self.idx] = not done
@@ -65,7 +62,7 @@ class ExperienceReplay:
         # Stack list of per-sample index arrays into shape (batch_size, batch_length)
         stacked = np.stack(idxs, axis=0)
         obs = torch.as_tensor(self.observations[stacked].astype(np.float32))
-        preprocess_observation_(obs, self.bit_depth)
+        preprocess_observation_(obs)
         obs = obs.to(self.device).transpose(0, 1)
         acts = torch.as_tensor(self.actions[stacked]).to(self.device).transpose(0, 1)
         rewards = torch.as_tensor(self.rewards[stacked]).to(self.device).transpose(0, 1)
@@ -87,7 +84,6 @@ class ExperienceReplay:
             'true_nonterminals': self.true_nonterminals,
             'idx': self.idx, 'steps': self.steps,
             'episodes': self.episodes, 'full': self.full, 'size': self.size,
-            'bit_depth': self.bit_depth,
         }, path)
 
     @classmethod
@@ -105,11 +101,10 @@ class ExperienceReplay:
             data = torch.load(path, map_location='cpu', weights_only=True)
         instance = cls.__new__(cls)
         instance.device        = device
-        instance.bit_depth     = data.get('bit_depth', 5)
         instance.observations  = data['observations']
         # Buffers saved before the switch to uint8 storage hold preprocessed float32 frames
         if instance.observations.dtype != np.uint8:
-            instance.observations = postprocess_observation(instance.observations, instance.bit_depth)
+            instance.observations = postprocess_observation(instance.observations)
         instance.actions       = data['actions']
         instance.rewards       = data['rewards']
         instance.non_terminals = data['non_terminals']

@@ -5,19 +5,18 @@ import numpy as np
 import torch
 
 
-def preprocess_observation_(observation: torch.Tensor, bit_depth: int) -> None:
-    observation.div_(2 ** (8 - bit_depth)).floor_().div_(2 ** bit_depth).sub_(0.5)
-    observation.add_(torch.rand_like(observation).div_(2 ** bit_depth))
+def preprocess_observation_(observation: torch.Tensor) -> None:
+    observation.div_(255.0).sub_(0.5)
 
 
-def postprocess_observation(observation: np.ndarray, bit_depth: int) -> np.ndarray:
-    return np.clip(np.floor((observation + 0.5) * 2 ** bit_depth) * 2 ** (8 - bit_depth), 0, 2 ** 8 - 1).astype(np.uint8)
+def postprocess_observation(observation: np.ndarray) -> np.ndarray:
+    return np.clip(np.round((observation + 0.5) * 255.0), 0, 255).astype(np.uint8)
 
 
 class BaseEnv(abc.ABC):
-    def _images_to_observation(self, images: np.ndarray, bit_depth: int) -> torch.Tensor:
+    def _images_to_observation(self, images: np.ndarray) -> torch.Tensor:
         images_t = torch.tensor(cv2.resize(images, (64, 64), interpolation=cv2.INTER_LINEAR).transpose(2, 0, 1), dtype=torch.float32)
-        preprocess_observation_(images_t, bit_depth)
+        preprocess_observation_(images_t)
         return images_t.unsqueeze(dim=0)
 
     @abc.abstractmethod
@@ -52,20 +51,19 @@ class BaseEnv(abc.ABC):
 
 
 class GymEnv(BaseEnv):
-    def __init__(self, env: str, seed: int, max_episode_length: int, action_repeat: int, bit_depth: int) -> None:
+    def __init__(self, env: str, seed: int, max_episode_length: int, action_repeat: int) -> None:
         import gymnasium as gym
         gym.logger.min_level = gym.logger.ERROR
         self._env = gym.make(env, render_mode='rgb_array')
         self._seed = seed
         self.max_episode_length = max_episode_length
         self.action_repeat = action_repeat
-        self.bit_depth = bit_depth
 
     def reset(self) -> torch.Tensor:
         self.t = 0
         self._env.reset(seed=self._seed)
         self._seed = None
-        return self._images_to_observation(self._env.render(), self.bit_depth)
+        return self._images_to_observation(self._env.render())
 
     def step(self, action: torch.Tensor) -> tuple[torch.Tensor, float, bool, bool]:
         action_np = action.detach().numpy()
@@ -79,7 +77,7 @@ class GymEnv(BaseEnv):
             done = terminated or truncated or self.t == self.max_episode_length
             if done:
                 break
-        observation = self._images_to_observation(self._env.render(), self.bit_depth)
+        observation = self._images_to_observation(self._env.render())
         return observation, float(reward), done, terminated_flag
 
     def render(self) -> None:
@@ -112,7 +110,7 @@ class GymEnv(BaseEnv):
 
 
 class DMControlEnv(BaseEnv):
-    def __init__(self, env: str, seed: int, max_episode_length: int, action_repeat: int, bit_depth: int) -> None:
+    def __init__(self, env: str, seed: int, max_episode_length: int, action_repeat: int) -> None:
         import mujoco
         from dm_control import suite
         domain, *task_parts = env.split('-')
@@ -120,7 +118,6 @@ class DMControlEnv(BaseEnv):
         self._env = suite.load(domain, task, task_kwargs={'random': seed})
         self.max_episode_length = max_episode_length
         self.action_repeat = action_repeat
-        self.bit_depth = bit_depth
         model = self._env.physics.model.ptr
         self._obs_renderer  = mujoco.Renderer(model, height=64,  width=64)
         self._disp_renderer = mujoco.Renderer(model, height=240, width=320)
@@ -133,7 +130,7 @@ class DMControlEnv(BaseEnv):
     def reset(self) -> torch.Tensor:
         self.t = 0
         self._env.reset()
-        return self._images_to_observation(self._render_obs(), self.bit_depth)
+        return self._images_to_observation(self._render_obs())
 
     def step(self, action: torch.Tensor) -> tuple[torch.Tensor, float, bool, bool]:
         action_np = action.detach().numpy()
@@ -147,7 +144,7 @@ class DMControlEnv(BaseEnv):
             done = time_step.last() or self.t == self.max_episode_length
             if done:
                 break
-        return self._images_to_observation(self._render_obs(), self.bit_depth), float(reward), done, terminated_flag
+        return self._images_to_observation(self._render_obs()), float(reward), done, terminated_flag
 
     def render(self) -> None:
         self._disp_renderer.update_scene(self._env.physics.data.ptr)
@@ -241,10 +238,10 @@ DMCONTROL_ENVS = [
 ]
 
 
-def Env(env: str, seed: int, max_episode_length: int, action_repeat: int, bit_depth: int) -> BaseEnv:
+def Env(env: str, seed: int, max_episode_length: int, action_repeat: int) -> BaseEnv:
     if env in GYM_ENVS:
-        return GymEnv(env, seed, max_episode_length, action_repeat, bit_depth)
+        return GymEnv(env, seed, max_episode_length, action_repeat)
     elif env in DMCONTROL_ENVS:
-        return DMControlEnv(env, seed, max_episode_length, action_repeat, bit_depth)
+        return DMControlEnv(env, seed, max_episode_length, action_repeat)
     else:
         raise ValueError(f"Unknown environment: '{env}'. Must be one of GYM_ENVS or DMCONTROL_ENVS.")

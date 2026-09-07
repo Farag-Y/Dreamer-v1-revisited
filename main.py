@@ -95,7 +95,6 @@ def main(cfg: DictConfig) -> None:
         seed=cfg.seed,
         max_episode_length=cfg.max_episode_length,
         action_repeat=cfg.action_repeat,
-        bit_depth=cfg.bit_depth,
     )
 
     dreamer = Dreamer.from_config(cfg, env, device)
