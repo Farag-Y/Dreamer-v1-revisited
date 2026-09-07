@@ -96,8 +96,15 @@ def _compute_vlambda(
     return V_lambda
 
 
+def _outer_discount(discounts: torch.Tensor) -> torch.Tensor:
+    batch = discounts.shape[0]
+    ones = torch.ones(batch, 1, device=discounts.device, dtype=discounts.dtype)
+    return torch.cat([ones, torch.cumprod(discounts[:, 1:-1], dim=1)], dim=1).detach()
+
+
 def _critic_loss(
     states: torch.Tensor, beliefs: torch.Tensor, v_lambda: torch.Tensor, critic: Critic,
+    weight: torch.Tensor,
 ) -> torch.Tensor:
     batch, T = states.shape[:2]
     v_pred = critic(
@@ -105,11 +112,11 @@ def _critic_loss(
         states.detach().reshape(-1, states.shape[-1]),
     ).reshape(batch, T)
     target = v_lambda.detach()
-    return 0.5 * (v_pred - target).pow(2).mean()
+    return 0.5 * (weight * (v_pred - target).pow(2)).mean()
 
 
-def _actor_loss(v_lambda: torch.Tensor) -> torch.Tensor:
-    return -v_lambda.mean()
+def _actor_loss(v_lambda: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
+    return -(weight * v_lambda).mean()
 
 
 class ActorCritic(nn.Module):
@@ -158,15 +165,16 @@ class ActorCritic(nn.Module):
         states_mid  = states[:, 1:-1]
         beliefs_mid = beliefs[:, 1:-1]
         v_lambda_mid = v_lambda[:, 1:-1]
+        outer_discount = _outer_discount(discounts)
 
         self.actor_optim.zero_grad()
-        a_loss = _actor_loss(v_lambda_mid)
+        a_loss = _actor_loss(v_lambda_mid, outer_discount)
         a_loss.backward()
         nn.utils.clip_grad_norm_(self.actor_optim.param_groups[0]['params'], cfg.grad_clip_norm)
         self.actor_optim.step()
 
         self.critic_optim.zero_grad()
-        c_loss = _critic_loss(states_mid, beliefs_mid, v_lambda_mid, self.critic)
+        c_loss = _critic_loss(states_mid, beliefs_mid, v_lambda_mid, self.critic, outer_discount)
         c_loss.backward()
         nn.utils.clip_grad_norm_(self.critic_optim.param_groups[0]['params'], cfg.grad_clip_norm)
         self.critic_optim.step()
