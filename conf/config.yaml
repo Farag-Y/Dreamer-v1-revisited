@@ -36,7 +36,7 @@ learning_rate: 6e-4 #TODO: Revise on learning rate from paper
 actor_learning_rate: 8e-5
 critic_learning_rate: 8e-5
 discount_model_gamma: 0.99
-discount_loss_scale: 10.0  # reference weights discount/pcont loss 10x vs KL/image/reward (dreamer.py: pcont_scale=10.0). Only applies when env is in TERMINATING_ENVS.
+discount_loss_scale: 10.0 #Only applied on termenating envs
 learning_rate_schedule: 0
 adam_epsilon: 1e-4
 grad_clip_norm: 100
