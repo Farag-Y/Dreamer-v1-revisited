@@ -25,6 +25,8 @@ class ExperienceReplay:
         self.idx, self.steps, self.episodes = 0, 0, 0
         self.full = False
         self.size = experience_size
+        self.episode_bounds: list[tuple[int, int]] = []
+        self._episode_start_step = 0
 
     def append(
         self, observation: torch.Tensor, reward: float, action: torch.Tensor, done: bool, terminated: bool,
@@ -36,23 +38,34 @@ class ExperienceReplay:
         self.true_nonterminals[self.idx] = not terminated
         self.idx = (self.idx + 1) % self.size
         self.full = self.full or self.idx == 0
+        if done:
+            length = self.steps + 1 - self._episode_start_step
+            self.episode_bounds.append((self._episode_start_step, length))
+            self._episode_start_step = self.steps + 1
         self.steps += 1
         self.episodes += (1 if done else 0)
+        self._prune_stale_episodes()
+
+    def _prune_stale_episodes(self) -> None:
+        valid_start = max(0, self.steps - self.size)
+        while self.episode_bounds and self.episode_bounds[0][0] < valid_start:
+            self.episode_bounds.pop(0)
 
     def _get_indexes(self, batch_size: int, batch_length: int) -> list[int]:
-        # Guard: buffer must have enough transitions to form a sequence
-        available = self.size if self.full else self.idx
-        if available < batch_length:
-            raise ValueError(f"Not enough transitions ({available}) to sample batch_length={batch_length}")
+
+        eligible = [(start, length) for start, length in self.episode_bounds if length >= batch_length]
+        if not eligible:
+            raise ValueError(
+                f"No completed episode currently in the buffer is long enough to "
+                f"sample batch_length={batch_length} ({len(self.episode_bounds)} "
+                "completed episodes tracked)."
+            )
         batches = []
-        for i in range(batch_size):
-            valid_idx = False
-            while not valid_idx:
-                max_size = self.idx - batch_length + 1 if not self.full else self.size
-                idx = np.random.randint(0, max_size)
-                idxs = np.arange(idx, idx + batch_length) % self.size
-                # Exclude sequences that overlap the write pointer at any position
-                valid_idx = self.idx not in idxs
+        for _ in range(batch_size):
+            start, length = eligible[np.random.randint(len(eligible))]
+            offset = np.random.randint(length - batch_length + 1)
+            window_start = start + offset
+            idxs = np.arange(window_start, window_start + batch_length) % self.size
             batches.append(idxs)
         return batches
 
@@ -114,4 +127,18 @@ class ExperienceReplay:
         instance.episodes      = data['episodes']
         instance.full          = data['full']
         instance.size          = data['size']
+        instance._rebuild_episode_bounds()
         return instance
+
+    def _rebuild_episode_bounds(self) -> None:
+        resident = self.size if self.full else self.idx
+        absolute_start = self.steps - resident
+        self.episode_bounds = []
+        current_start = absolute_start
+        for i in range(resident):
+            absolute_step = absolute_start + i
+            pos = absolute_step % self.size
+            if self.non_terminals[pos, 0] == 0:
+                self.episode_bounds.append((current_start, absolute_step - current_start + 1))
+                current_start = absolute_step + 1
+        self._episode_start_step = current_start
