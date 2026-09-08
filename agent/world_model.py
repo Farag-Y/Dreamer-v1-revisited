@@ -142,12 +142,13 @@ class WorldModel(nn.Module):
         if self.train_discount:
             discount_logits = model_wrapper(self.discount_model,rssm_output.det_hidden_states,rssm_output.posterior_states,trailing_dims=1)
             discount_loss = F.binary_cross_entropy_with_logits(discount_logits, true_nonterminals[:-1].squeeze(-1), reduction='none').mean()
+            discount_loss = discount_loss * cfg.discount_loss_scale #Increasing the scale of discount loss.
         else:
             discount_loss = torch.tensor(0.0, device=device)
         
         decoded_obs = model_wrapper(self.decoder, rssm_output.det_hidden_states, rssm_output.posterior_states, trailing_dims=1)
-        obs_loss    = F.mse_loss(decoded_obs, obs[1:], reduction='none').sum((2, 3, 4)).mean()
-        reward_loss = F.mse_loss(predicted_reward, rewards[:-1], reduction='none').mean()
+        obs_loss    = 0.5 * F.mse_loss(decoded_obs, obs[1:], reduction='none').sum((2, 3, 4)).mean()
+        reward_loss = 0.5 * F.mse_loss(predicted_reward, rewards[:-1], reduction='none').mean()
 
         # overshooting_loss = _latent_overshooting(
         #     cfg, self.rssm, self.reward_model,
