@@ -119,6 +119,8 @@ dmypy.json
 # Local docs
 docs/
 
+#Ckpts
+model_ckpt/
 # Results
 results/
 

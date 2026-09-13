@@ -13,7 +13,7 @@ def load_checkpoint(cfg: DictConfig, device: str, dreamer: Dreamer) -> Metrics:
     dreamer.world_model.optimizer.load_state_dict(state['world_model_optim'])
     dreamer.behavior.actor_optim.load_state_dict(state['actor_optim'])
     dreamer.behavior.critic_optim.load_state_dict(state['critic_optim'])
-    return Metrics.load(os.path.join(os.path.dirname(cfg.models), 'metrics.pt'))
+    return Metrics.load(cfg.models.replace('_models.pt', '_metrics.pt'))
 
 
 def save_checkpoint(cfg: DictConfig, episode: int, dreamer: Dreamer, metrics: Metrics,

@@ -3,7 +3,7 @@ id: default
 seed: 1
 
 # Environment
-env: cartpole-swingup-sparse
+env: cheetah-run
 symbolic_env: false
 max_episode_length: 1000
 action_repeat: 2 ## Unlike planet, a constant action repeat for the chosen envs.
@@ -11,7 +11,7 @@ render: false
 imagination_horizon: 15
 
 # Training
-episodes: 1000
+episodes: 2000
 seed_episodes: 5
 collect_interval: 100
 batch_size: 50
@@ -64,8 +64,8 @@ test_episodes: 10
 # Checkpointing
 checkpoint_interval: 25
 experience_replay_interval: 100  # save experience_replay_{episode}.pt alongside metrics.png every N episodes (0 = disabled)
-models: ""
-experience_replay_path: ""
+models: "./2026-09-08_05-30-01_checkpoint_1000_models.pt"
+experience_replay_path: "./2026-09-08_05-30-01_experience_replay_1000.pt"
 # models: "results/vast-ai-first/Checkpoint_150/models.pt"
 # experience_replay_path: "results/vast-ai-first/Checkpoint_150/experience_replay.pt"
 
