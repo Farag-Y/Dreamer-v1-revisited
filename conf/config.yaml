@@ -64,8 +64,8 @@ test_episodes: 10
 # Checkpointing
 checkpoint_interval: 25
 experience_replay_interval: 100  # save experience_replay_{episode}.pt alongside metrics.png every N episodes (0 = disabled)
-models: "./2026-09-08_05-30-01_checkpoint_1000_models.pt"
-experience_replay_path: "./2026-09-08_05-30-01_experience_replay_1000.pt"
+models: ""
+experience_replay_path: ""
 # models: "results/vast-ai-first/Checkpoint_150/models.pt"
 # experience_replay_path: "results/vast-ai-first/Checkpoint_150/experience_replay.pt"
 

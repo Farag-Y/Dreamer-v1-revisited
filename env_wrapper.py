@@ -118,13 +118,14 @@ class DMControlEnv(BaseEnv):
         self._env = suite.load(domain, task, task_kwargs={'random': seed})
         self.max_episode_length = max_episode_length
         self.action_repeat = action_repeat
+        self._camera_id = {'quadruped': 2}.get(domain, 0)
         model = self._env.physics.model.ptr
         self._obs_renderer  = mujoco.Renderer(model, height=64,  width=64)
         self._disp_renderer = mujoco.Renderer(model, height=240, width=320)
         self._play_renderer = mujoco.Renderer(model, height=480, width=480)
 
     def _render_obs(self) -> np.ndarray:
-        self._obs_renderer.update_scene(self._env.physics.data.ptr)
+        self._obs_renderer.update_scene(self._env.physics.data.ptr, camera=self._camera_id)
         return self._obs_renderer.render()
 
     def reset(self) -> torch.Tensor:
@@ -147,13 +148,13 @@ class DMControlEnv(BaseEnv):
         return self._images_to_observation(self._render_obs()), float(reward), done, terminated_flag
 
     def render(self) -> None:
-        self._disp_renderer.update_scene(self._env.physics.data.ptr)
+        self._disp_renderer.update_scene(self._env.physics.data.ptr, camera=self._camera_id)
         frame = self._disp_renderer.render()
         cv2.imshow('screen', frame[:, :, ::-1])
         cv2.waitKey(1)
 
     def render_frame(self, height: int = 480, width: int = 480) -> np.ndarray:
-        self._play_renderer.update_scene(self._env.physics.data.ptr)
+        self._play_renderer.update_scene(self._env.physics.data.ptr, camera=self._camera_id)
         frame = self._play_renderer.render()
         if frame.shape[0] != height or frame.shape[1] != width:
             frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_LINEAR)
