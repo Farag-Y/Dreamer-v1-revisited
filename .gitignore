@@ -124,6 +124,9 @@ model_ckpt/
 # Results
 results/
 
+# Downloaded checkpoints for resuming training (large binaries, kept in R2 instead)
+checkpoints/
+
 # Hydra runtime output
 outputs/
 .hydra/

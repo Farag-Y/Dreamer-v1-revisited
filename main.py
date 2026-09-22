@@ -69,6 +69,7 @@ def train(cfg: DictConfig, dreamer: Dreamer, experience_replay: ExperienceReplay
         results = [dreamer.train_on_batch(experience_replay) for _ in tqdm(range(cfg.collect_interval))]
         metrics.record(results)
         episode_reward = dreamer.collect_episode(env, experience_replay, explore=True)
+        metrics.episodes.append(episode)
         metrics.train_rewards.append(episode_reward)
         prev_env_steps = metrics.train_env_steps[-1] if metrics.train_env_steps else metrics.last_step
         metrics.train_env_steps.append(prev_env_steps + env.t)
