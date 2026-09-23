@@ -1,13 +1,10 @@
 # Experiment
-id: default
 seed: 1
 
 # Environment
 env: finger-turn-hard
-symbolic_env: false
 max_episode_length: 1000
 action_repeat: 2 ## Unlike planet, a constant action repeat for the chosen envs.
-render: false
 imagination_horizon: 15
 
 # Training
@@ -37,7 +34,6 @@ actor_learning_rate: 8e-5
 critic_learning_rate: 8e-5
 discount_model_gamma: 0.99
 discount_loss_scale: 10.0 #Only applied on termenating envs
-learning_rate_schedule: 0
 adam_epsilon: 1e-4
 grad_clip_norm: 100
 
@@ -47,7 +43,6 @@ overshooting_kl_beta: 0
 overshooting_reward_scale: 0
 
 # Losses
-global_kl_beta: 0.0
 free_nats: 3.0
 
 # Action noise
